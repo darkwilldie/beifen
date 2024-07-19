@@ -16,6 +16,7 @@ from scipy.spatial.distance import pdist
 import phenograph
 from torch.nn import DataParallel
 from sklearn.cross_decomposition import CCA
+from tqdm import tqdm
 
 def stack_rows_from_all_matrices(matrices):
     """
@@ -38,10 +39,23 @@ def stack_rows_from_all_matrices(matrices):
     return stacked_matrices
 
 def compute_cca_score(X, Y, n_components=1):
+    """
+    Compute the CCA (Canonical Correlation Analysis) score between two sets of variables.
+
+    Parameters:
+    X (array-like): The first set of variables.
+    Y (array-like): The second set of variables.
+    n_components (int, optional): The number of canonical components to keep. Default is 1.
+
+    Returns:
+    float: The CCA score between X and Y.
+
+    """
     cca = CCA(n_components=n_components)
     cca.fit(X, Y)
     X_c, Y_c = cca.transform(X, Y)
     return np.corrcoef(X_c[:, 0], Y_c[:, 0])[0, 1]
+
 def sort_by_index(content_list, index_list):
     """
     根据索引列表对内容列表进行排序。
@@ -85,6 +99,16 @@ def pearson_corr_torch(x, y):
     return softmax_output
 
 def cos_sim(sc_feature, other_feature):
+    """
+    Compute the cosine similarity between two feature vectors.
+
+    Args:
+        sc_feature (torch.Tensor): The feature vector of the first sample.
+        other_feature (torch.Tensor): The feature vector of the second sample.
+
+    Returns:
+        torch.Tensor: The cosine similarity matrix between the two feature vectors.
+    """
     sc_feature = F.normalize(sc_feature, dim=1)
     other_feature = F.normalize(other_feature, dim=1)
     cos_sim_matrix = torch.matmul(sc_feature, other_feature.t())
@@ -111,10 +135,41 @@ def scsm_fit_predict(
                     lambda_infoNCE=10,
                     lambda_recon_image=1,
                     device_ids=[2, 3]):  # 指定使用 GPU 2 和 GPU 3
+    """
+    使用SCSM模型进行多模态单细胞分析的拟合和预测。
+
+    参数：
+    intersection_sc_st_cluster (list): 交集的单细胞和空间转录组的聚类结果。
+    sc_data_not_intersection_cluster (list): 非交集的单细胞数据的聚类结果。
+    st_data_not_intersection_cluster (list): 非交集的空间转录组数据的聚类结果。
+    sc_index (list): 单细胞数据的索引。
+    st_index (list): 空间转录组数据的索引。
+    After_processing_sc_data_shape (list): 经过处理的单细胞数据的形状。
+    After_processing_st_data_shape (list): 经过处理的空间转录组数据的形状。
+    intersection_sc_st (list): 交集的单细胞和空间转录组数据。
+    sc_data_not_intersection (list): 非交集的单细胞数据。
+    st_data_not_intersection (list): 非交集的空间转录组数据。
+    cell_feature (tensor): 细胞特征。
+    latent_dim (int, optional): 潜在空间的维度，默认为100。
+    learn_rate (float, optional): 学习率，默认为0.001。
+    optimization_epsilon_epoch (int, optional): 优化迭代次数，默认为100。
+    lambda_recon_gene (int, optional): 基因重构损失的权重，默认为1。
+    lambda_infoNCE (int, optional): infoNCE损失的权重，默认为10。
+    lambda_recon_image (int, optional): 图像重构损失的权重，默认为1。
+    device_ids (list, optional): 使用的GPU设备ID列表，默认为[2, 3]。
+
+    返回：
+    sum_cos_sim (array): 单细胞和空间转录组之间的余弦相似度矩阵。
+    reconstructed_data (array): 重构的数据。
+    latent_sc (list): 单细胞的潜在空间。
+    latent_st (list): 空间转录组的潜在空间。
+    latent_image (tensor): 图像的潜在空间。
+    """
 
     n_hidden = 1024
 
-    device = torch.device(f'cuda:{device_ids[0]}')  # 主设备为 GPU 2
+    # device = torch.device(f'cuda:{device_ids[0]}')  # 主设备为 GPU 2
+    device = torch.device('cpu')  # 主设备为 GPU 2
     input_data_list = [data.to(device) for data in intersection_sc_st + sc_data_not_intersection + st_data_not_intersection]
     cluster_label_list = [data.to(device) for data in intersection_sc_st_cluster + sc_data_not_intersection_cluster + st_data_not_intersection_cluster]
 
@@ -139,7 +194,7 @@ def scsm_fit_predict(
     image_loss = []
     trip_loss = []
 
-    for epoch in range(optimization_epsilon_epoch):
+    for epoch in tqdm(range(optimization_epsilon_epoch)):
         Model_Image.train()
         Model_cell.train()
 

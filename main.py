@@ -8,7 +8,7 @@ from sklearn.preprocessing import StandardScaler
 import phenograph
 import logging
 from sklearn.decomposition import PCA
-# import os
+import os
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 def cluster_data(data, cluster_type, cluster_number):
     """
@@ -44,7 +44,7 @@ def load_data(paths):
             #
             data = pd.read_csv(path)
             data.columns.values[0] = 'gene'
-            print(data.shape)
+            print('data.shape:', data.shape)
             loaded_data.append(data)
         except Exception as e:
             logging.error(f"Error loading data from {path}: {e}")
@@ -65,22 +65,35 @@ def process_data(data, columns_to_drop):
     return torch.tensor(np_array, dtype=torch.float32)
 
 def calculate_columns_to_drop(data, threshold):
-    zero_counts = (data == 0).sum()
+    zero_counts = (data == 0).sum(axis=0)
     zero_percentage = (zero_counts / len(data)) * 100
     return zero_percentage[zero_percentage >= threshold].index.tolist()
 
 
 def main(params):
+    """
+    Process and analyze single-cell and spatial transcriptome data.
+
+    Args:
+        params (object): An object containing various parameters for data processing and analysis.
+
+    Returns:
+        None
+    """
     np.random.seed(42)
     torch.manual_seed(42)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(42)
 
+    # Load single-cell and spatial transcriptome data
     sing_cell_load_data = load_data(params.sing_cell_multi_omic_path)
     spatial_transcriptome_load_data = load_data(params.spatial_transcriptome_multi_omic_path)
 
+    # Find the intersection of single-cell and spatial transcriptome data
     intersection_sing_cell_spatial_transcriptome = find_duplicates_with_indexes(params.sing_cell_multi_omic, params.spatial_transcriptome_multi_omic)
-    print(intersection_sing_cell_spatial_transcriptome)
+    print('intersection_sing_cell_spatial_transcriptome:', intersection_sing_cell_spatial_transcriptome)
+
+    # Prepare data for processing
     data_to_process = []
     threshold = 70
     for gene, indexes in list(intersection_sing_cell_spatial_transcriptome.items()):
@@ -92,6 +105,7 @@ def main(params):
     for index in [item for item in range(len(params.spatial_transcriptome_multi_omic)) if item not in [value[1] for value in intersection_sing_cell_spatial_transcriptome.values()]]:
         data_to_process.append(('spatial_transcriptome', None, [None, index]))
 
+    # Process single-cell and spatial transcriptome data
     After_processing_sc_data = [None] * len(params.sing_cell_multi_omic)
     After_processing_st_data = [None] * len(params.spatial_transcriptome_multi_omic)
 
@@ -113,35 +127,38 @@ def main(params):
 
             if st_index is not None:
                 spatial_data = spatial_transcriptome_load_data[st_index]
-                columns_to_drop = calculate_columns_to_drop(sing_cell_data, threshold)
+                # 将sing_cell_data改为spatial_data，原来的sing_cell_data可能笔误
+                columns_to_drop = calculate_columns_to_drop(spatial_data, threshold)
                 After_processing_st_data[st_index] = process_data(spatial_data, columns_to_drop)
 
     After_processing_sc_data = [data for data in After_processing_sc_data if data is not None]
     After_processing_st_data = [data for data in After_processing_st_data if data is not None]
     
+    # Cluster single-cell data
     sc_cluster = []
     for data in After_processing_sc_data:
         cluster_labels = cluster_data(data.detach().cpu().numpy(), params.cluster_type, params.cluster_number)
         sc_cluster.append(torch.tensor(cluster_labels))
-        print(f'Data Shape: {data.shape}')
+        print(f'After_processing_sc_data Shape: {data.shape}')
 
+    # Cluster spatial transcriptome data
     st_cluster = []
     for data in After_processing_st_data:
         cluster_labels = cluster_data(data.detach().cpu().numpy(), params.cluster_type, params.cluster_number)
         st_cluster.append(torch.tensor(cluster_labels))
-        print(f'Data Shape: {data.shape}')
+        print(f'After_processing_st_data Data Shape: {data.shape}')
 
+    # Load cell features
     cell_feature = pd.read_csv(params.spatial_cell_feature_path)
     cell_feature.columns.values[0] = 'gene'
     cell_feature = dataframe_to_tensor(cell_feature)
-    print('cell_feature shape', cell_feature.shape)
+    print('cell_feature shape:', cell_feature.shape)
 
+    # Process intersection of single-cell and spatial transcriptome data
     intersection_sc_st = []
     After_processing_sc_data_shape = []
     After_processing_st_data_shape = []
-
     intersection_sc_st_cluster = []
-
     sc_index = []
     st_index = []
 
@@ -153,6 +170,7 @@ def main(params):
         sc_index.append(indexes[0])
         st_index.append(indexes[1])
 
+    # Process non-intersecting single-cell data
     sc_data_not_intersection_cluster = []
     sc_data_not_intersection = []
     for index in [item for item in range(len(params.sing_cell_multi_omic)) if item not in [value[0] for value in intersection_sing_cell_spatial_transcriptome.values()]]:
@@ -160,6 +178,7 @@ def main(params):
         sc_data_not_intersection_cluster.append(sc_cluster[index])
         sc_index.append(index)
 
+    # Process non-intersecting spatial transcriptome data
     st_data_not_intersection_cluster = []
     st_data_not_intersection = []
     for index in [item for item in range(len(params.spatial_transcriptome_multi_omic)) if item not in [value[1] for value in intersection_sing_cell_spatial_transcriptome.values()]]:
@@ -167,8 +186,12 @@ def main(params):
         st_data_not_intersection_cluster.append(st_cluster[index])
         st_index.append(index)
 
-    print(intersection_sc_st, sc_data_not_intersection, st_data_not_intersection)
+    print('intersection_sc_st:', intersection_sc_st)
+    print('sc_data_not_intersection:', sc_data_not_intersection)
+    print('st_data_not_intersection:', st_data_not_intersection)
+    # print(intersection_sc_st, sc_data_not_intersection, st_data_not_intersection)
 
+    # Perform data analysis using the processed data
     sum_cos_sim, reconstructed_data, latent_sc, latent_st, latent_image = scsm.scsm_fit_predict(
         intersection_sc_st_cluster,
         sc_data_not_intersection_cluster,
@@ -187,11 +210,11 @@ def main(params):
         lambda_recon_gene=params.lambda_recon_gene,
         lambda_infoNCE=params.lambda_infoNCE,
         lambda_recon_image=params.lambda_recon_image,
-        device_ids=[1,2,0,3]  # 指定使用 GPU 2 和 GPU 3
+        device_ids=[1,2,0,3]  # Specify GPU devices to use
     )
-    print(reconstructed_data.shape)
+    print('reconstructed_data.shape:', reconstructed_data.shape)
 
-    print(sum_cos_sim.shape)
+    print('sum_cos_sim.shape:', sum_cos_sim.shape)
     tensor_tuple = (sum_cos_sim)
     torch.save(tensor_tuple, 'section2.pt')
 
@@ -199,9 +222,12 @@ def main(params):
     df_cos_sim_sc_st = pd.DataFrame(latent_st[0].cpu().detach().numpy())
     df_latent_image = pd.DataFrame(latent_image.cpu().detach().numpy()) 
 
-    df_cos_sim_sc_image.to_csv('result/latent_sc.csv', index=False, header=True)
-    df_cos_sim_sc_st.to_csv('result/latent_st.csv', index=False, header=True)
-    df_latent_image.to_csv('result/latent_image.csv', index=False, header=True)
+    result_dir = 'result'
+    os.makedirs(result_dir, exist_ok=True)
+
+    df_cos_sim_sc_image.to_csv(os.path.join(result_dir, 'latent_sc.csv'), index=False, header=True)
+    df_cos_sim_sc_st.to_csv(os.path.join(result_dir, 'latent_st.csv'), index=False, header=True)
+    df_latent_image.to_csv(os.path.join(result_dir, 'latent_image.csv'), index=False, header=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='SCSM')
@@ -218,7 +244,7 @@ if __name__ == "__main__":
     parser.add_argument('--spatial_cell_feature_path', default=\
         "/home/yanghl/zhushijia/model_new_zhu/data_process/section2/new_cell_deep_feature.csv", type=str)
     
-    parser.add_argument('--device', default='cuda:2', type=str)  # 这里指定默认设备为 GPU 2
+    # parser.add_argument('--device', default='cuda:2', type=str)  # 这里指定默认设备为 GPU 2
     parser.add_argument('--lambda_recon_gene', default=1, type=int)
     parser.add_argument('--lambda_infoNCE', default=100, type=int)
     parser.add_argument('--lambda_recon_image', default=0, type=int)
@@ -229,4 +255,5 @@ if __name__ == "__main__":
     parser.add_argument('--cluster_number', default=5, type=int)
     params = parser.parse_args()
 
+if __name__ == "__main__":
     main(params)
