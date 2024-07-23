@@ -125,16 +125,16 @@ def scsm_fit_predict(
         After_processing_sc_data_shape,
         After_processing_st_data_shape,
         intersection_sc_st,
-                    sc_data_not_intersection,
-                    st_data_not_intersection,
-                    cell_feature,
-                    latent_dim=100,
-                    learn_rate=1e-3,
-                    optimization_epsilon_epoch=100,
-                    lambda_recon_gene=1,
-                    lambda_infoNCE=10,
-                    lambda_recon_image=1,
-                    device_ids=[2, 3]):  # 指定使用 GPU 2 和 GPU 3
+        sc_data_not_intersection,
+        st_data_not_intersection,
+        cell_feature,
+        latent_dim=100,
+        learn_rate=1e-3,
+        optimization_epsilon_epoch=100,
+        lambda_recon_gene=1,
+        lambda_infoNCE=10,
+        lambda_recon_image=1,
+        device_ids=[2, 3]):  # 指定使用 GPU 2 和 GPU 3
     """
     使用SCSM模型进行多模态单细胞分析的拟合和预测。
 

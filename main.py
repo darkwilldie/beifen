@@ -85,9 +85,16 @@ def main(params):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(42)
 
+    params.sing_cell_multi_omic_path = [os.path.join(params.data_dir, path) for path in params.sing_cell_multi_omic_path]
+    params.spatial_transcriptome_multi_omic_path = [os.path.join(params.data_dir, path) for path in params.spatial_transcriptome_multi_omic_path]
+    params.spatial_cell_feature_path = os.path.join(params.data_dir, params.spatial_cell_feature_path)
+
     # Load single-cell and spatial transcriptome data
     sing_cell_load_data = load_data(params.sing_cell_multi_omic_path)
     spatial_transcriptome_load_data = load_data(params.spatial_transcriptome_multi_omic_path)
+
+    print('sing_cell_load_data:', sing_cell_load_data)
+    print('spatial_transcriptome_load_data:', spatial_transcriptome_load_data)
 
     # Find the intersection of single-cell and spatial transcriptome data
     intersection_sing_cell_spatial_transcriptome = find_duplicates_with_indexes(params.sing_cell_multi_omic, params.spatial_transcriptome_multi_omic)
@@ -115,6 +122,9 @@ def main(params):
         if data_type == 'intersection' and sc_index is not None and st_index is not None:
             sing_cell_data = sing_cell_load_data[sc_index]
             spatial_data = spatial_transcriptome_load_data[st_index]
+            print('-'*50)
+            print('st_index:', st_index)
+            print('spatial_data:', spatial_data)
             columns_to_drop = calculate_columns_to_drop(sing_cell_data, threshold)
             After_processing_sc_data[sc_index] = process_data(sing_cell_data, columns_to_drop)
             After_processing_st_data[st_index] = process_data(spatial_data, columns_to_drop)
@@ -206,7 +216,7 @@ def main(params):
         cell_feature,
         latent_dim=params.latent_dim,
         learn_rate=params.learn_rate,
-        optimization_epsilon_epoch=params.optimization_epsilon_epoch,
+        optimization_epsilon_epoch=params.epochs,
         lambda_recon_gene=params.lambda_recon_gene,
         lambda_infoNCE=params.lambda_infoNCE,
         lambda_recon_image=params.lambda_recon_image,
@@ -216,7 +226,7 @@ def main(params):
 
     print('sum_cos_sim.shape:', sum_cos_sim.shape)
     tensor_tuple = (sum_cos_sim)
-    torch.save(tensor_tuple, 'section2.pt')
+    torch.save(tensor_tuple, params.weight_name + '.pt')
 
     df_cos_sim_sc_image = pd.DataFrame(latent_sc[0].cpu().detach().numpy())
     df_cos_sim_sc_st = pd.DataFrame(latent_st[0].cpu().detach().numpy())
@@ -236,13 +246,13 @@ if __name__ == "__main__":
 
 # section2  Mouse_brain_hippocampus_STexpr_cellSegmentation 
     parser.add_argument('--sing_cell_multi_omic_path', nargs='+', \
-        default=['/home/yanghl/zhushijia/model_new_zhu/data_process/section2/process_sc_rna_data.csv'], type=str)
+        default=['process_sc_rna_data.csv'], type=str)
     
     parser.add_argument('--spatial_transcriptome_multi_omic_path', nargs='+', \
-        default=['/home/yanghl/zhushijia/model_new_zhu/data_process/section2/cell_st_rna_data.csv'], type=str)
+        default=['cell_st_rna_data.csv'], type=str)
     
     parser.add_argument('--spatial_cell_feature_path', default=\
-        "/home/yanghl/zhushijia/model_new_zhu/data_process/section2/new_cell_deep_feature.csv", type=str)
+        "new_cell_deep_feature.csv", type=str)
     
     # parser.add_argument('--device', default='cuda:2', type=str)  # 这里指定默认设备为 GPU 2
     parser.add_argument('--lambda_recon_gene', default=1, type=int)
@@ -251,8 +261,10 @@ if __name__ == "__main__":
     parser.add_argument('--latent_dim', default=512, type=int)
     parser.add_argument('--cluster_type', default='k', type=str)
     parser.add_argument('--learn_rate', default=1e-3, type=int)
-    parser.add_argument('--optimization_epsilon_epoch', default=200, type=int)
+    parser.add_argument('--epochs', default=200, type=int)
     parser.add_argument('--cluster_number', default=5, type=int)
+    parser.add_argument('--weight_name', default='section2', type=str)
+    parser.add_argument('--data_dir', default='/home/yanghl/zhushijia/model_new_zhu/data_process/section2', type=str)
     params = parser.parse_args()
 
 if __name__ == "__main__":
