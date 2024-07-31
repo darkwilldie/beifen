@@ -2,4 +2,6 @@
 *.pyc
 *.pt
 *.csv
+*.npz
+*.npy
 

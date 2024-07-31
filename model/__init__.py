@@ -17,6 +17,7 @@ import phenograph
 from torch.nn import DataParallel
 from sklearn.cross_decomposition import CCA
 from tqdm import tqdm
+import os
 
 def stack_rows_from_all_matrices(matrices):
     """
@@ -168,8 +169,17 @@ def scsm_fit_predict(
 
     n_hidden = 1024
 
-    # device = torch.device(f'cuda:{device_ids[0]}')  # 主设备为 GPU 2
-    device = torch.device('cpu')  # 主设备为 GPU 2
+    torch.cuda.empty_cache()
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
+
+    device = torch.device(f'cuda:{device_ids[0]}')  # 主设备为 GPU 2
+    # device = torch.device('cpu')  
+    print('intersection_sc_st:', (intersection_sc_st))
+    print('sc_data_not_intersection:', (sc_data_not_intersection))
+    print('st_data_not_intersection:', (st_data_not_intersection))
+    print('intersection_sc_st_cluster:', (intersection_sc_st_cluster))
+    print('sc_data_not_intersection_cluster:', (sc_data_not_intersection_cluster))
+    print('st_data_not_intersection_cluster:', (st_data_not_intersection_cluster))
     input_data_list = [data.to(device) for data in intersection_sc_st + sc_data_not_intersection + st_data_not_intersection]
     cluster_label_list = [data.to(device) for data in intersection_sc_st_cluster + sc_data_not_intersection_cluster + st_data_not_intersection_cluster]
 
@@ -295,5 +305,7 @@ def scsm_fit_predict(
     df['trip_loss'] = trip_loss
     df['st_image_loss'] = image_loss
     df.to_csv('loss.csv', index=False, header=True)
+
+    torch.cuda.empty_cache()
 
     return sum_cos_sim, reconstructed_data[0].detach().cpu().numpy(), latent_sc, latent_st, latent_image
