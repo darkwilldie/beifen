@@ -69,6 +69,146 @@ def calculate_columns_to_drop(data, threshold):
     zero_percentage = (zero_counts / len(data)) * 100
     return zero_percentage[zero_percentage >= threshold].index.tolist()
 
+def load_npz(data_path):
+    loaded_data = np.load(data_path, allow_pickle=True)
+    intersection_sc_st_cluster = [torch.tensor(arr) for arr in loaded_data['arr_0']]
+    sc_data_not_intersection_cluster = [torch.tensor(arr) for arr in loaded_data['arr_1']]
+    st_data_not_intersection_cluster = [torch.tensor(arr) for arr in loaded_data['arr_2']]
+    sc_index = list(loaded_data['arr_3'])
+    st_index = list(loaded_data['arr_4'])
+    After_processing_sc_data_shape = list(loaded_data['arr_5'])
+    After_processing_st_data_shape = list(loaded_data['arr_6'])
+    intersection_sc_st = [torch.tensor(arr) for arr in loaded_data['arr_7']]
+    sc_data_not_intersection = [torch.tensor(arr) for arr in loaded_data['arr_8']]
+    st_data_not_intersection = [torch.tensor(arr) for arr in loaded_data['arr_9']]
+    cell_feature = torch.tensor(loaded_data['arr_10'])
+
+    return intersection_sc_st_cluster, sc_data_not_intersection_cluster, st_data_not_intersection_cluster, sc_index, st_index, After_processing_sc_data_shape, After_processing_st_data_shape, intersection_sc_st, sc_data_not_intersection, st_data_not_intersection, cell_feature
+
+def preprocess(params):
+    params.sing_cell_multi_omic_path = [os.path.join(params.data_dir, path) for path in params.sing_cell_multi_omic_path]
+    params.spatial_transcriptome_multi_omic_path = [os.path.join(params.data_dir, path) for path in params.spatial_transcriptome_multi_omic_path]
+    params.spatial_cell_feature_path = os.path.join(params.data_dir, params.spatial_cell_feature_path)
+
+    # Load single-cell and spatial transcriptome data
+    sing_cell_load_data = load_data(params.sing_cell_multi_omic_path)
+    spatial_transcriptome_load_data = load_data(params.spatial_transcriptome_multi_omic_path)
+
+    # print('sing_cell_load_data:', sing_cell_load_data)
+    # print('spatial_transcriptome_load_data:', spatial_transcriptome_load_data)
+
+    # Find the intersection of single-cell and spatial transcriptome data
+    intersection_sing_cell_spatial_transcriptome = find_duplicates_with_indexes(params.sing_cell_multi_omic, params.spatial_transcriptome_multi_omic)
+    # print('intersection_sing_cell_spatial_transcriptome:', intersection_sing_cell_spatial_transcriptome)
+
+    # Prepare data for processing
+    data_to_process = []
+    threshold = 70
+    for gene, indexes in list(intersection_sing_cell_spatial_transcriptome.items()):
+        data_to_process.append(('intersection', gene, indexes))
+
+    for index in [item for item in range(len(params.sing_cell_multi_omic)) if item not in [value[0] for value in intersection_sing_cell_spatial_transcriptome.values()]]:
+        data_to_process.append(('sing_cell', None, [index, None]))
+
+    for index in [item for item in range(len(params.spatial_transcriptome_multi_omic)) if item not in [value[1] for value in intersection_sing_cell_spatial_transcriptome.values()]]:
+        data_to_process.append(('spatial_transcriptome', None, [None, index]))
+
+    # Process single-cell and spatial transcriptome data
+    After_processing_sc_data = [None] * len(params.sing_cell_multi_omic)
+    After_processing_st_data = [None] * len(params.spatial_transcriptome_multi_omic)
+
+    for data_type, gene, indexes in data_to_process:
+        sc_index, st_index = indexes
+
+        if data_type == 'intersection' and sc_index is not None and st_index is not None:
+            sing_cell_data = sing_cell_load_data[sc_index]
+            spatial_data = spatial_transcriptome_load_data[st_index]
+            print('^'*50)
+            print('st_index:', st_index)
+            print('spatial_data:', spatial_data)
+            columns_to_drop = calculate_columns_to_drop(sing_cell_data, threshold)
+            After_processing_sc_data[sc_index] = process_data(sing_cell_data, columns_to_drop)
+            After_processing_st_data[st_index] = process_data(spatial_data, columns_to_drop)
+
+        else:
+            if sc_index is not None:
+                sing_cell_data = sing_cell_load_data[sc_index]
+                columns_to_drop = calculate_columns_to_drop(sing_cell_data, threshold)
+                After_processing_sc_data[sc_index] = process_data(sing_cell_data, columns_to_drop)
+
+            if st_index is not None:
+                spatial_data = spatial_transcriptome_load_data[st_index]
+                # 将sing_cell_data改为spatial_data，原来的sing_cell_data可能笔误
+                columns_to_drop = calculate_columns_to_drop(spatial_data, threshold)
+                After_processing_st_data[st_index] = process_data(spatial_data, columns_to_drop)
+
+    After_processing_sc_data = [data for data in After_processing_sc_data if data is not None]
+    After_processing_st_data = [data for data in After_processing_st_data if data is not None]
+    
+    # Cluster single-cell data
+    sc_cluster = []
+    for data in After_processing_sc_data:
+        cluster_labels = cluster_data(data.detach().cpu().numpy(), params.cluster_type, params.cluster_number)
+        sc_cluster.append(torch.tensor(cluster_labels))
+        # print(f'After_processing_sc_data Shape: {data.shape}')
+
+    # Cluster spatial transcriptome data
+    st_cluster = []
+    for data in After_processing_st_data:
+        cluster_labels = cluster_data(data.detach().cpu().numpy(), params.cluster_type, params.cluster_number)
+        st_cluster.append(torch.tensor(cluster_labels))
+        # print(f'After_processing_st_data Data Shape: {data.shape}')
+
+    # Load cell features
+    cell_feature = pd.read_csv(params.spatial_cell_feature_path)
+    cell_feature.columns.values[0] = 'gene'
+    cell_feature = dataframe_to_tensor(cell_feature)
+    # print('cell_feature shape:', cell_feature.shape)
+
+    # Process intersection of single-cell and spatial transcriptome data
+    intersection_sc_st = []
+    After_processing_sc_data_shape = []
+    After_processing_st_data_shape = []
+    intersection_sc_st_cluster = []
+    sc_index = []
+    st_index = []
+
+    for gene, indexes in list(intersection_sing_cell_spatial_transcriptome.items()):
+        intersection_sc_st.append(torch.cat((After_processing_sc_data[indexes[0]], After_processing_st_data[indexes[1]]), dim=0))
+        intersection_sc_st_cluster.append(torch.cat((sc_cluster[indexes[0]], st_cluster[indexes[1]]), dim=0))
+        After_processing_sc_data_shape.append(After_processing_sc_data[indexes[0]].shape)
+        After_processing_st_data_shape.append(After_processing_st_data[indexes[1]].shape)
+        sc_index.append(indexes[0])
+        st_index.append(indexes[1])
+
+    # Process non-intersecting single-cell data
+    sc_data_not_intersection_cluster = []
+    sc_data_not_intersection = []
+    for index in [item for item in range(len(params.sing_cell_multi_omic)) if item not in [value[0] for value in intersection_sing_cell_spatial_transcriptome.values()]]:
+        sc_data_not_intersection.append(After_processing_sc_data[index])
+        sc_data_not_intersection_cluster.append(sc_cluster[index])
+        sc_index.append(index)
+
+    # Process non-intersecting spatial transcriptome data
+    st_data_not_intersection_cluster = []
+    st_data_not_intersection = []
+    for index in [item for item in range(len(params.spatial_transcriptome_multi_omic)) if item not in [value[1] for value in intersection_sing_cell_spatial_transcriptome.values()]]:
+        st_data_not_intersection.append(After_processing_st_data[index])
+        st_data_not_intersection_cluster.append(st_cluster[index])
+        st_index.append(index)
+
+    # print('intersection_sc_st:', intersection_sc_st)
+    # print('sc_data_not_intersection:', sc_data_not_intersection)
+    # print('st_data_not_intersection:', st_data_not_intersection)
+
+    # save the processed data as numpy arrays
+    path = os.path.join(params.data_dir, 'processed_data')
+    os.makedirs(path, exist_ok=True)
+    # print('After_processing_sc_data_shape:', After_processing_sc_data_shape)
+    np.savez(os.path.join(path, 'data.npz'), intersection_sc_st_cluster, sc_data_not_intersection_cluster, st_data_not_intersection_cluster, sc_index, st_index, After_processing_sc_data_shape, After_processing_st_data_shape, intersection_sc_st, sc_data_not_intersection, st_data_not_intersection, cell_feature)
+
+    return intersection_sc_st_cluster, sc_data_not_intersection_cluster, st_data_not_intersection_cluster, sc_index, st_index, After_processing_sc_data_shape, After_processing_st_data_shape, intersection_sc_st, sc_data_not_intersection, st_data_not_intersection, cell_feature
+
 
 def main(params):
     """
@@ -91,143 +231,11 @@ def main(params):
     if os.path.exists(data_path):
         print('-'*50)
         print('loading data from:', data_path)
-        loaded_data = np.load(data_path, allow_pickle=True)
-        intersection_sc_st_cluster = [torch.tensor(arr) for arr in loaded_data['arr_0']]
-        sc_data_not_intersection_cluster = [torch.tensor(arr) for arr in loaded_data['arr_1']]
-        st_data_not_intersection_cluster = [torch.tensor(arr) for arr in loaded_data['arr_2']]
-        sc_index = list(loaded_data['arr_3'])
-        st_index = list(loaded_data['arr_4'])
-        After_processing_sc_data_shape = list(loaded_data['arr_5'])
-        After_processing_st_data_shape = list(loaded_data['arr_6'])
-        intersection_sc_st = [torch.tensor(arr) for arr in loaded_data['arr_7']]
-        sc_data_not_intersection = [torch.tensor(arr) for arr in loaded_data['arr_8']]
-        st_data_not_intersection = [torch.tensor(arr) for arr in loaded_data['arr_9']]
-        cell_feature = torch.tensor(loaded_data['arr_10'])
-        
+        intersection_sc_st_cluster, sc_data_not_intersection_cluster, st_data_not_intersection_cluster, sc_index, st_index, After_processing_sc_data_shape, After_processing_st_data_shape, intersection_sc_st, sc_data_not_intersection, st_data_not_intersection, cell_feature = load_npz(data_path)
     else:
         print('%'*50)
-        print('data_path not exists:', data_path)
-        params.sing_cell_multi_omic_path = [os.path.join(params.data_dir, path) for path in params.sing_cell_multi_omic_path]
-        params.spatial_transcriptome_multi_omic_path = [os.path.join(params.data_dir, path) for path in params.spatial_transcriptome_multi_omic_path]
-        params.spatial_cell_feature_path = os.path.join(params.data_dir, params.spatial_cell_feature_path)
-
-        # Load single-cell and spatial transcriptome data
-        sing_cell_load_data = load_data(params.sing_cell_multi_omic_path)
-        spatial_transcriptome_load_data = load_data(params.spatial_transcriptome_multi_omic_path)
-
-        # print('sing_cell_load_data:', sing_cell_load_data)
-        # print('spatial_transcriptome_load_data:', spatial_transcriptome_load_data)
-
-        # Find the intersection of single-cell and spatial transcriptome data
-        intersection_sing_cell_spatial_transcriptome = find_duplicates_with_indexes(params.sing_cell_multi_omic, params.spatial_transcriptome_multi_omic)
-        # print('intersection_sing_cell_spatial_transcriptome:', intersection_sing_cell_spatial_transcriptome)
-
-        # Prepare data for processing
-        data_to_process = []
-        threshold = 70
-        for gene, indexes in list(intersection_sing_cell_spatial_transcriptome.items()):
-            data_to_process.append(('intersection', gene, indexes))
-
-        for index in [item for item in range(len(params.sing_cell_multi_omic)) if item not in [value[0] for value in intersection_sing_cell_spatial_transcriptome.values()]]:
-            data_to_process.append(('sing_cell', None, [index, None]))
-
-        for index in [item for item in range(len(params.spatial_transcriptome_multi_omic)) if item not in [value[1] for value in intersection_sing_cell_spatial_transcriptome.values()]]:
-            data_to_process.append(('spatial_transcriptome', None, [None, index]))
-
-        # Process single-cell and spatial transcriptome data
-        After_processing_sc_data = [None] * len(params.sing_cell_multi_omic)
-        After_processing_st_data = [None] * len(params.spatial_transcriptome_multi_omic)
-
-        for data_type, gene, indexes in data_to_process:
-            sc_index, st_index = indexes
-
-            if data_type == 'intersection' and sc_index is not None and st_index is not None:
-                sing_cell_data = sing_cell_load_data[sc_index]
-                spatial_data = spatial_transcriptome_load_data[st_index]
-                print('-'*50)
-                print('st_index:', st_index)
-                print('spatial_data:', spatial_data)
-                columns_to_drop = calculate_columns_to_drop(sing_cell_data, threshold)
-                After_processing_sc_data[sc_index] = process_data(sing_cell_data, columns_to_drop)
-                After_processing_st_data[st_index] = process_data(spatial_data, columns_to_drop)
-
-            else:
-                if sc_index is not None:
-                    sing_cell_data = sing_cell_load_data[sc_index]
-                    columns_to_drop = calculate_columns_to_drop(sing_cell_data, threshold)
-                    After_processing_sc_data[sc_index] = process_data(sing_cell_data, columns_to_drop)
-
-                if st_index is not None:
-                    spatial_data = spatial_transcriptome_load_data[st_index]
-                    # 将sing_cell_data改为spatial_data，原来的sing_cell_data可能笔误
-                    columns_to_drop = calculate_columns_to_drop(spatial_data, threshold)
-                    After_processing_st_data[st_index] = process_data(spatial_data, columns_to_drop)
-
-        After_processing_sc_data = [data for data in After_processing_sc_data if data is not None]
-        After_processing_st_data = [data for data in After_processing_st_data if data is not None]
-        
-        # Cluster single-cell data
-        sc_cluster = []
-        for data in After_processing_sc_data:
-            cluster_labels = cluster_data(data.detach().cpu().numpy(), params.cluster_type, params.cluster_number)
-            sc_cluster.append(torch.tensor(cluster_labels))
-            # print(f'After_processing_sc_data Shape: {data.shape}')
-
-        # Cluster spatial transcriptome data
-        st_cluster = []
-        for data in After_processing_st_data:
-            cluster_labels = cluster_data(data.detach().cpu().numpy(), params.cluster_type, params.cluster_number)
-            st_cluster.append(torch.tensor(cluster_labels))
-            # print(f'After_processing_st_data Data Shape: {data.shape}')
-
-        # Load cell features
-        cell_feature = pd.read_csv(params.spatial_cell_feature_path)
-        cell_feature.columns.values[0] = 'gene'
-        cell_feature = dataframe_to_tensor(cell_feature)
-        # print('cell_feature shape:', cell_feature.shape)
-
-        # Process intersection of single-cell and spatial transcriptome data
-        intersection_sc_st = []
-        After_processing_sc_data_shape = []
-        After_processing_st_data_shape = []
-        intersection_sc_st_cluster = []
-        sc_index = []
-        st_index = []
-
-        for gene, indexes in list(intersection_sing_cell_spatial_transcriptome.items()):
-            intersection_sc_st.append(torch.cat((After_processing_sc_data[indexes[0]], After_processing_st_data[indexes[1]]), dim=0))
-            intersection_sc_st_cluster.append(torch.cat((sc_cluster[indexes[0]], st_cluster[indexes[1]]), dim=0))
-            After_processing_sc_data_shape.append(After_processing_sc_data[indexes[0]].shape)
-            After_processing_st_data_shape.append(After_processing_st_data[indexes[1]].shape)
-            sc_index.append(indexes[0])
-            st_index.append(indexes[1])
-
-        # Process non-intersecting single-cell data
-        sc_data_not_intersection_cluster = []
-        sc_data_not_intersection = []
-        for index in [item for item in range(len(params.sing_cell_multi_omic)) if item not in [value[0] for value in intersection_sing_cell_spatial_transcriptome.values()]]:
-            sc_data_not_intersection.append(After_processing_sc_data[index])
-            sc_data_not_intersection_cluster.append(sc_cluster[index])
-            sc_index.append(index)
-
-        # Process non-intersecting spatial transcriptome data
-        st_data_not_intersection_cluster = []
-        st_data_not_intersection = []
-        for index in [item for item in range(len(params.spatial_transcriptome_multi_omic)) if item not in [value[1] for value in intersection_sing_cell_spatial_transcriptome.values()]]:
-            st_data_not_intersection.append(After_processing_st_data[index])
-            st_data_not_intersection_cluster.append(st_cluster[index])
-            st_index.append(index)
-
-        # print('intersection_sc_st:', intersection_sc_st)
-        # print('sc_data_not_intersection:', sc_data_not_intersection)
-        # print('st_data_not_intersection:', st_data_not_intersection)
-
-        # save the processed data as numpy arrays
-        path = os.path.join(params.data_dir, 'processed_data')
-        os.makedirs(path, exist_ok=True)
-        # print('After_processing_sc_data_shape:', After_processing_sc_data_shape)
-        np.savez(os.path.join(path, 'data.npz'), intersection_sc_st_cluster, sc_data_not_intersection_cluster, st_data_not_intersection_cluster, sc_index, st_index, After_processing_sc_data_shape, After_processing_st_data_shape, intersection_sc_st, sc_data_not_intersection, st_data_not_intersection, cell_feature)
-
+        print(f'No npz file found in {data_path}, processing data...')
+        intersection_sc_st_cluster, sc_data_not_intersection_cluster, st_data_not_intersection_cluster, sc_index, st_index, After_processing_sc_data_shape, After_processing_st_data_shape, intersection_sc_st, sc_data_not_intersection, st_data_not_intersection, cell_feature = preprocess(params)
         
     # print(intersection_sc_st, sc_data_not_intersection, st_data_not_intersection)
 

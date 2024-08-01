@@ -172,14 +172,21 @@ def scsm_fit_predict(
     torch.cuda.empty_cache()
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
 
-    device = torch.device(f'cuda:{device_ids[0]}')  # 主设备为 GPU 2
-    # device = torch.device('cpu')  
-    print('intersection_sc_st:', (intersection_sc_st))
-    print('sc_data_not_intersection:', (sc_data_not_intersection))
-    print('st_data_not_intersection:', (st_data_not_intersection))
-    print('intersection_sc_st_cluster:', (intersection_sc_st_cluster))
-    print('sc_data_not_intersection_cluster:', (sc_data_not_intersection_cluster))
-    print('st_data_not_intersection_cluster:', (st_data_not_intersection_cluster))
+    # device = torch.device(f'cuda:{device_ids[0]}')  # 主设备为 GPU 2
+    device = torch.device('cpu')  
+    # print every data
+    print('*' * 50)
+    print('intersection_sc_st_cluster:', (intersection_sc_st_cluster), end='\n-----------------------------------\n')
+    print('sc_data_not_intersection_cluster:', (sc_data_not_intersection_cluster), end='\n-----------------------------------\n')
+    print('st_data_not_intersection_cluster:', (st_data_not_intersection_cluster), end='\n-----------------------------------\n')
+    print('sc_index:', (sc_index), end='\n-----------------------------------\n')
+    print('st_index:', (st_index), end='\n-----------------------------------\n')
+    print('After_processing_sc_data_shape:', (After_processing_sc_data_shape), end='\n-----------------------------------\n')
+    print('After_processing_st_data_shape:', (After_processing_st_data_shape), end='\n-----------------------------------\n')
+    print('intersection_sc_st:', (intersection_sc_st), end='\n-----------------------------------\n')
+    print('sc_data_not_intersection:', (sc_data_not_intersection), end='\n-----------------------------------\n')
+    print('st_data_not_intersection:', (st_data_not_intersection), end='\n-----------------------------------\n')
+    print('cell_feature:', (cell_feature), end='\n-----------------------------------\n')
     input_data_list = [data.to(device) for data in intersection_sc_st + sc_data_not_intersection + st_data_not_intersection]
     cluster_label_list = [data.to(device) for data in intersection_sc_st_cluster + sc_data_not_intersection_cluster + st_data_not_intersection_cluster]
 
