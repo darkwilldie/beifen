@@ -18,6 +18,9 @@ from torch.nn import DataParallel
 from sklearn.cross_decomposition import CCA
 from tqdm import tqdm
 import os
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+
 
 def stack_rows_from_all_matrices(matrices):
     """
@@ -95,7 +98,7 @@ def pearson_corr_torch(x, y):
     
     # 使用 PyTorch 的 softmax 函数
     softmax_output = F.softmax(correlation, dim=1)
-    print(softmax_output)
+    # print(softmax_output)
 
     return softmax_output
 
@@ -114,10 +117,11 @@ def cos_sim(sc_feature, other_feature):
     other_feature = F.normalize(other_feature, dim=1)
     cos_sim_matrix = torch.matmul(sc_feature, other_feature.t())
     softmax_output = F.softmax(cos_sim_matrix, dim=1)
-    print(softmax_output)
+    # print(softmax_output)
     return cos_sim_matrix
 
 def scsm_fit_predict(
+        rank,
         intersection_sc_st_cluster,
         sc_data_not_intersection_cluster,
         st_data_not_intersection_cluster,
@@ -135,7 +139,7 @@ def scsm_fit_predict(
         lambda_recon_gene=1,
         lambda_infoNCE=10,
         lambda_recon_image=1,
-        device_ids=[2, 3]):  # 指定使用 GPU 2 和 GPU 3
+        device_ids=[0, 1, 2]):  # 指定使用 GPU 2 和 GPU 3
     """
     使用SCSM模型进行多模态单细胞分析的拟合和预测。
 
@@ -168,29 +172,32 @@ def scsm_fit_predict(
     """
 
     n_hidden = 1024
-
-    torch.cuda.empty_cache()
-    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
-
-    device = torch.device(f'cuda:{device_ids[0]}')  # 主设备为 GPU 2
+    device = torch.device(f"cuda:{rank}")
+    # device = torch.device(f'cuda:{device_ids[0]}')  # 主设备为 GPU 2
+    # device2 = torch.device(f'cuda:{device_ids[1]}')
     # device = torch.device('cpu')  
-    print('intersection_sc_st:', (intersection_sc_st))
-    print('sc_data_not_intersection:', (sc_data_not_intersection))
-    print('st_data_not_intersection:', (st_data_not_intersection))
-    print('intersection_sc_st_cluster:', (intersection_sc_st_cluster))
-    print('sc_data_not_intersection_cluster:', (sc_data_not_intersection_cluster))
-    print('st_data_not_intersection_cluster:', (st_data_not_intersection_cluster))
+    # print('intersection_sc_st:', (intersection_sc_st))
+    # print('sc_data_not_intersection:', (sc_data_not_intersection))
+    # print('st_data_not_intersection:', (st_data_not_intersection))
+    # print('intersection_sc_st_cluster:', (intersection_sc_st_cluster))
+    # print('sc_data_not_intersection_cluster:', (sc_data_not_intersection_cluster))
+    # print('st_data_not_intersection_cluster:', (st_data_not_intersection_cluster))
     input_data_list = [data.to(device) for data in intersection_sc_st + sc_data_not_intersection + st_data_not_intersection]
     cluster_label_list = [data.to(device) for data in intersection_sc_st_cluster + sc_data_not_intersection_cluster + st_data_not_intersection_cluster]
 
     feature_dim = [data.shape[1] for data in input_data_list]
     feature_dim_image_feature = cell_feature.shape[1]
-
-    print('++++++++++ SCSM for multi-modality single-cell analysis ++++++++++')
-    print('SCSM initialization')
-
-    Model_cell = DataParallel(SinglecellNet(feature_dim, n_hidden, latent_dim).to(device), device_ids=device_ids)
-    Model_Image = DataParallel(ImageEncoder(feature_dim_image_feature, n_hidden, latent_dim).to(device), device_ids=device_ids)
+    
+    if rank == 0:
+        print('++++++++++ SCSM for multi-modality single-cell analysis ++++++++++')
+        print('SCSM initialization')
+        print('device_ids:', device_ids)
+    # Model_cell = DataParallel(SinglecellNet(feature_dim, n_hidden, latent_dim).to(device), device_ids=device_ids)
+    # Model_Image = DataParallel(ImageEncoder(feature_dim_image_feature, n_hidden, latent_dim).to(device), device_ids=device_ids)
+    
+    # 在模型初始化部分
+    Model_cell = DDP(SinglecellNet(feature_dim, n_hidden, latent_dim).to(device), device_ids=[device])
+    Model_Image = DDP(ImageEncoder(feature_dim_image_feature, n_hidden, latent_dim).to(device), device_ids=[device])
 
     optimizer = optim.Adam([
         {'params': Model_cell.parameters()},
@@ -207,6 +214,11 @@ def scsm_fit_predict(
     for epoch in tqdm(range(optimization_epsilon_epoch)):
         Model_Image.train()
         Model_cell.train()
+        
+        # 确保数据在 GPU 上
+        input_data_list = [data.cuda() for data in input_data_list]
+        cluster_label_list = [label.cuda() for label in cluster_label_list]
+        cell_feature = cell_feature.cuda()
 
         z0, reconstructed_data, total_reconstruction_loss_gene, total_sparse_penalty, total_trip_loss_x = Model_cell(input_data_list, cluster_label_list)
         latent_image, _, total_reconstruction_loss_image, _ = Model_Image(cell_feature.to(device))
@@ -253,7 +265,8 @@ def scsm_fit_predict(
         image_reconstruction_loss.append(total_reconstruction_loss_image.item())
         trip_loss.append(total_trip_loss_x.item())
         image_loss.append(infoNCE_loss.item())
-        print(f"epoch: {epoch}, total loss: {L_total:.5f}")
+        if rank == 0:
+            print(f"epoch: {epoch}, total loss: {L_total:.5f}")
 
     with torch.no_grad():
         z, _, _, _, _ = Model_cell(input_data_list, cluster_label_list)
@@ -269,7 +282,8 @@ def scsm_fit_predict(
         latent_st = sort_by_index(latent_st, st_index)
 
     all_latent_st = latent_st + [latent_image]
-    print(len(latent_sc), len(all_latent_st))
+    if rank == 0:
+        print(len(latent_sc), len(all_latent_st))
 
     sum_cos_sim =cos_sim(latent_sc[0], all_latent_st[0])
     # sc = latent_sc[0].detach().cpu().numpy()
@@ -307,5 +321,6 @@ def scsm_fit_predict(
     df.to_csv('loss.csv', index=False, header=True)
 
     torch.cuda.empty_cache()
+    cleanup()
 
     return sum_cos_sim, reconstructed_data[0].detach().cpu().numpy(), latent_sc, latent_st, latent_image

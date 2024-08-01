@@ -9,6 +9,21 @@ import phenograph
 import logging
 from sklearn.decomposition import PCA
 import os
+import torch.distributed as dist
+import torch.multiprocessing as mp
+
+
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+    torch.cuda.set_device(rank)
+
+def cleanup():
+    dist.destroy_process_group()
+
+
+
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 def cluster_data(data, cluster_type, cluster_number):
     """
@@ -44,7 +59,8 @@ def load_data(paths):
             #
             data = pd.read_csv(path)
             data.columns.values[0] = 'gene'
-            print('data.shape:', data.shape)
+            if rank == 0:
+                print('data.shape:', data.shape)
             loaded_data.append(data)
         except Exception as e:
             logging.error(f"Error loading data from {path}: {e}")
@@ -57,7 +73,7 @@ def dataframe_to_tensor(df):
 
 def process_data(data, columns_to_drop):
     data = data.drop(columns=columns_to_drop)
-    print(data)
+    # print(data)
     np_array = data.iloc[:, 1:].values.astype(float)
     ###
     scaler = StandardScaler()
@@ -70,7 +86,7 @@ def calculate_columns_to_drop(data, threshold):
     return zero_percentage[zero_percentage >= threshold].index.tolist()
 
 
-def main(params):
+def train(rank, world_size, params):
     """
     Process and analyze single-cell and spatial transcriptome data.
 
@@ -80,6 +96,9 @@ def main(params):
     Returns:
         None
     """
+    setup(rank, world_size)
+    torch.cuda.set_device(rank)
+    
     np.random.seed(42)
     torch.manual_seed(42)
     if torch.cuda.is_available():
@@ -89,8 +108,9 @@ def main(params):
     # data_path = os.path.join('')
 
     if os.path.exists(data_path):
-        print('-'*50)
-        print('loading data from:', data_path)
+        if rank == 0:
+            print('-'*50)
+            print('loading data from:', data_path)
         loaded_data = np.load(data_path, allow_pickle=True)
         intersection_sc_st_cluster = [torch.tensor(arr) for arr in loaded_data['arr_0']]
         sc_data_not_intersection_cluster = [torch.tensor(arr) for arr in loaded_data['arr_1']]
@@ -105,8 +125,9 @@ def main(params):
         cell_feature = torch.tensor(loaded_data['arr_10'])
         
     else:
-        print('%'*50)
-        print('data_path not exists:', data_path)
+        if rank == 0:
+            print('%'*50)
+            print('data_path not exists:', data_path)
         params.sing_cell_multi_omic_path = [os.path.join(params.data_dir, path) for path in params.sing_cell_multi_omic_path]
         params.spatial_transcriptome_multi_omic_path = [os.path.join(params.data_dir, path) for path in params.spatial_transcriptome_multi_omic_path]
         params.spatial_cell_feature_path = os.path.join(params.data_dir, params.spatial_cell_feature_path)
@@ -144,9 +165,9 @@ def main(params):
             if data_type == 'intersection' and sc_index is not None and st_index is not None:
                 sing_cell_data = sing_cell_load_data[sc_index]
                 spatial_data = spatial_transcriptome_load_data[st_index]
-                print('-'*50)
-                print('st_index:', st_index)
-                print('spatial_data:', spatial_data)
+                # print('-'*50)
+                # print('st_index:', st_index)
+                # print('spatial_data:', spatial_data)
                 columns_to_drop = calculate_columns_to_drop(sing_cell_data, threshold)
                 After_processing_sc_data[sc_index] = process_data(sing_cell_data, columns_to_drop)
                 After_processing_st_data[st_index] = process_data(spatial_data, columns_to_drop)
@@ -233,6 +254,7 @@ def main(params):
 
     # Perform data analysis using the processed data
     sum_cos_sim, reconstructed_data, latent_sc, latent_st, latent_image = scsm.scsm_fit_predict(
+        rank,
         intersection_sc_st_cluster,
         sc_data_not_intersection_cluster,
         st_data_not_intersection_cluster,
@@ -250,11 +272,11 @@ def main(params):
         lambda_recon_gene=params.lambda_recon_gene,
         lambda_infoNCE=params.lambda_infoNCE,
         lambda_recon_image=params.lambda_recon_image,
-        device_ids=[0,]  # Specify GPU devices to use
+        device_ids=[0, 1, 2]  # Specify GPU devices to use
     )
-    print('reconstructed_data.shape:', reconstructed_data.shape)
+    # print('reconstructed_data.shape:', reconstructed_data.shape)
 
-    print('sum_cos_sim.shape:', sum_cos_sim.shape)
+    # print('sum_cos_sim.shape:', sum_cos_sim.shape)
     tensor_tuple = (sum_cos_sim)
     torch.save(tensor_tuple, params.weight_name + '.pt')
 
@@ -269,7 +291,7 @@ def main(params):
     df_cos_sim_sc_st.to_csv(os.path.join(result_dir, 'latent_st.csv'), index=False, header=True)
     df_latent_image.to_csv(os.path.join(result_dir, 'latent_image.csv'), index=False, header=True)
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description='SCSM')
     parser.add_argument('--sing_cell_multi_omic', nargs='+', default=['rna'], type=str)
     parser.add_argument('--spatial_transcriptome_multi_omic', nargs='+', default=['rna'], type=str)
@@ -296,6 +318,9 @@ if __name__ == "__main__":
     parser.add_argument('--weight_name', default='section2', type=str)
     parser.add_argument('--data_dir', default='/home/yanghl/zhushijia/model_new_zhu/data_process/section2', type=str)
     params = parser.parse_args()
+    
+    world_size = 3
+    mp.spawn(train, args=(world_size, params), nprocs=world_size, join=True)
 
 if __name__ == "__main__":
-    main(params)
+    main()
