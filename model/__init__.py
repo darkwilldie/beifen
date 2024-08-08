@@ -19,6 +19,7 @@ from sklearn.cross_decomposition import CCA
 from tqdm import tqdm
 import os
 
+
 def stack_rows_from_all_matrices(matrices):
     """
     Stack rows from all matrices.
@@ -33,11 +34,16 @@ def stack_rows_from_all_matrices(matrices):
     max_rows = max(matrix.shape[0] for matrix in matrices)
     stacked_matrices = []
     for row_index in range(max_rows):
-        selected_rows = [matrix[row_index:row_index+1, :] for matrix in matrices if matrix.shape[0] > row_index]
+        selected_rows = [
+            matrix[row_index : row_index + 1, :]
+            for matrix in matrices
+            if matrix.shape[0] > row_index
+        ]
         if selected_rows:
             stacked_matrix = torch.vstack(selected_rows)
             stacked_matrices.append(stacked_matrix)
     return stacked_matrices
+
 
 def compute_cca_score(X, Y, n_components=1):
     """
@@ -57,6 +63,7 @@ def compute_cca_score(X, Y, n_components=1):
     X_c, Y_c = cca.transform(X, Y)
     return np.corrcoef(X_c[:, 0], Y_c[:, 0])[0, 1]
 
+
 def sort_by_index(content_list, index_list):
     """
     根据索引列表对内容列表进行排序。
@@ -73,31 +80,34 @@ def sort_by_index(content_list, index_list):
     _, sorted_content = zip(*sorted_pairs)
     return list(sorted_content)
 
+
 def count_matching_elements(matrix1, matrix2):
     """Count the number of elements that are the same in two matrices."""
     if matrix1.shape != matrix2.shape:
         raise ValueError("Both matrices must have the same shape.")
-    
+
     matching_elements = (matrix1 == matrix2).sum().item()
     return matching_elements
+
 
 def pearson_corr_torch(x, y):
     """Calculate Pearson correlation coefficients for two matrices using PyTorch."""
     x = x - x.mean(dim=1, keepdim=True)
     y = y - y.mean(dim=1, keepdim=True)
-    
+
     numerator = torch.mm(x, y.t())
-    
+
     x_norm = x.norm(dim=1)
     y_norm = y.norm(dim=1)
-    
+
     correlation = numerator / torch.outer(x_norm, y_norm)
-    
+
     # 使用 PyTorch 的 softmax 函数
     softmax_output = F.softmax(correlation, dim=1)
     print(softmax_output)
 
     return softmax_output
+
 
 def cos_sim(sc_feature, other_feature):
     """
@@ -117,25 +127,27 @@ def cos_sim(sc_feature, other_feature):
     print(softmax_output)
     return cos_sim_matrix
 
+
 def scsm_fit_predict(
-        intersection_sc_st_cluster,
-        sc_data_not_intersection_cluster,
-        st_data_not_intersection_cluster,
-        sc_index,
-        st_index,
-        After_processing_sc_data_shape,
-        After_processing_st_data_shape,
-        intersection_sc_st,
-        sc_data_not_intersection,
-        st_data_not_intersection,
-        cell_feature,
-        latent_dim=100,
-        learn_rate=1e-3,
-        optimization_epsilon_epoch=100,
-        lambda_recon_gene=1,
-        lambda_infoNCE=10,
-        lambda_recon_image=1,
-        device_ids=[2, 3]):  # 指定使用 GPU 2 和 GPU 3
+    intersection_sc_st_cluster,
+    sc_data_not_intersection_cluster,
+    st_data_not_intersection_cluster,
+    sc_index,
+    st_index,
+    After_processing_sc_data_shape,
+    After_processing_st_data_shape,
+    intersection_sc_st,
+    sc_data_not_intersection,
+    st_data_not_intersection,
+    cell_feature,
+    latent_dim=100,
+    learn_rate=1e-3,
+    optimization_epsilon_epoch=100,
+    lambda_recon_gene=1,
+    lambda_infoNCE=10,
+    lambda_recon_image=1,
+    device_ids=[2, 3],
+):  # 指定使用 GPU 2 和 GPU 3
     """
     使用SCSM模型进行多模态单细胞分析的拟合和预测。
 
@@ -170,32 +182,48 @@ def scsm_fit_predict(
     n_hidden = 1024
 
     torch.cuda.empty_cache()
-    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 
-    device = torch.device(f'cuda:{device_ids[0]}')  # 主设备为 GPU 2
-    # device = torch.device('cpu')  
-    print('intersection_sc_st:', (intersection_sc_st))
-    print('sc_data_not_intersection:', (sc_data_not_intersection))
-    print('st_data_not_intersection:', (st_data_not_intersection))
-    print('intersection_sc_st_cluster:', (intersection_sc_st_cluster))
-    print('sc_data_not_intersection_cluster:', (sc_data_not_intersection_cluster))
-    print('st_data_not_intersection_cluster:', (st_data_not_intersection_cluster))
-    input_data_list = [data.to(device) for data in intersection_sc_st + sc_data_not_intersection + st_data_not_intersection]
-    cluster_label_list = [data.to(device) for data in intersection_sc_st_cluster + sc_data_not_intersection_cluster + st_data_not_intersection_cluster]
+    # device = torch.device(f'cuda:{device_ids[0]}')  # 主设备为 GPU 2
+    device = torch.device("cpu")
+    print("intersection_sc_st:", (intersection_sc_st))
+    print("sc_data_not_intersection:", (sc_data_not_intersection))
+    print("st_data_not_intersection:", (st_data_not_intersection))
+    print("intersection_sc_st_cluster:", (intersection_sc_st_cluster))
+    print("sc_data_not_intersection_cluster:", (sc_data_not_intersection_cluster))
+    print("st_data_not_intersection_cluster:", (st_data_not_intersection_cluster))
+    input_data_list = [
+        data.to(device)
+        for data in intersection_sc_st
+        + sc_data_not_intersection
+        + st_data_not_intersection
+    ]
+    cluster_label_list = [
+        data.to(device)
+        for data in intersection_sc_st_cluster
+        + sc_data_not_intersection_cluster
+        + st_data_not_intersection_cluster
+    ]
 
     feature_dim = [data.shape[1] for data in input_data_list]
     feature_dim_image_feature = cell_feature.shape[1]
 
-    print('++++++++++ SCSM for multi-modality single-cell analysis ++++++++++')
-    print('SCSM initialization')
+    print("++++++++++ SCSM for multi-modality single-cell analysis ++++++++++")
+    print("SCSM initialization")
 
-    Model_cell = DataParallel(SinglecellNet(feature_dim, n_hidden, latent_dim).to(device), device_ids=device_ids)
-    Model_Image = DataParallel(ImageEncoder(feature_dim_image_feature, n_hidden, latent_dim).to(device), device_ids=device_ids)
+    Model_cell = DataParallel(
+        SinglecellNet(feature_dim, n_hidden, latent_dim).to(device),
+        device_ids=device_ids,
+    )
+    Model_Image = DataParallel(
+        ImageEncoder(feature_dim_image_feature, n_hidden, latent_dim).to(device),
+        device_ids=device_ids,
+    )
 
-    optimizer = optim.Adam([
-        {'params': Model_cell.parameters()},
-        {'params': Model_Image.parameters()}
-    ], lr=learn_rate)
+    optimizer = optim.Adam(
+        [{"params": Model_cell.parameters()}, {"params": Model_Image.parameters()}],
+        lr=learn_rate,
+    )
 
     st_image_loss_fn = Voxel_loss(margin=0.25)
     loss = []
@@ -208,11 +236,32 @@ def scsm_fit_predict(
         Model_Image.train()
         Model_cell.train()
 
-        z0, reconstructed_data, total_reconstruction_loss_gene, total_sparse_penalty, total_trip_loss_x = Model_cell(input_data_list, cluster_label_list)
-        latent_image, _, total_reconstruction_loss_image, _ = Model_Image(cell_feature.to(device))
+        (
+            z0,
+            reconstructed_data,
+            total_reconstruction_loss_gene,
+            total_sparse_penalty,
+            total_trip_loss_x,
+        ) = Model_cell(input_data_list, cluster_label_list)
+        latent_image, _, total_reconstruction_loss_image, _ = Model_Image(
+            cell_feature.to(device)
+        )
 
-        latent_sc = [tensor[:shape[0], ] for tensor, shape in zip([z0[0]], After_processing_sc_data_shape)]
-        latent_st = [tensor[shape[0]:, ] for tensor, shape in zip([z0[0]], After_processing_sc_data_shape)]
+        print("latent_image:", latent_image.shape)
+
+        print("len of z0:", len(z0))
+        print("z0[0]:", z0[0].shape)
+        print("After_processing_sc_data_shape:", After_processing_sc_data_shape)
+        latent_sc = [
+            tensor[: shape[0],]
+            for tensor, shape in zip([z0[0]], After_processing_sc_data_shape)
+        ]
+        latent_st = [
+            tensor[shape[0] :,]
+            for tensor, shape in zip([z0[0]], After_processing_sc_data_shape)
+        ]
+        print("latent_sc:", latent_sc[0].shape)
+        print("latent_st:", latent_st[0].shape)
 
         latent_sc += [z0[1]] if len(z0) > 1 else []
         latent_st += [z0[2]] if len(z0) > 2 else []
@@ -227,13 +276,17 @@ def scsm_fit_predict(
             infoNCE_loss += st_image_loss_fn(pair[0], pair[1])
         for pair in latent_st:
             infoNCE_loss += st_image_loss_fn(latent_image, pair)
-            
+
         total_reconstruction_loss_gene = total_reconstruction_loss_gene.sum()
         total_reconstruction_loss_image = total_reconstruction_loss_image.sum()
-        total_trip_loss_x = total_trip_loss_x.sum()
+        # total_trip_loss_x = total_trip_loss_x.sum()
         infoNCE_loss = infoNCE_loss.sum()
-        total_loss = total_reconstruction_loss_gene * lambda_recon_gene + infoNCE_loss * lambda_infoNCE \
-            + total_reconstruction_loss_image * lambda_recon_image + total_trip_loss_x * 0
+        total_loss = (
+            total_reconstruction_loss_gene * lambda_recon_gene
+            + infoNCE_loss * lambda_infoNCE
+            + total_reconstruction_loss_image * lambda_recon_image
+            # + total_trip_loss_x * 0
+        )
         # print(total_loss)
         # print(total_reconstruction_loss_gene)
         # print(infoNCE_loss)
@@ -241,7 +294,6 @@ def scsm_fit_predict(
         # quit()
         optimizer.zero_grad()
 
-        
         if total_loss.dim() > 0:
             total_loss = total_loss.sum()  # Ensure it's a scalar
 
@@ -259,8 +311,14 @@ def scsm_fit_predict(
         z, _, _, _, _ = Model_cell(input_data_list, cluster_label_list)
         latent_image, _, _, _ = Model_Image(cell_feature.to(device))
 
-        latent_sc = [tensor[:shape[0], ] for tensor, shape in zip([z0[0]], After_processing_sc_data_shape)]
-        latent_st = [tensor[shape[0]:, ] for tensor, shape in zip([z0[0]], After_processing_sc_data_shape)]
+        latent_sc = [
+            tensor[: shape[0],]
+            for tensor, shape in zip([z0[0]], After_processing_sc_data_shape)
+        ]
+        latent_st = [
+            tensor[shape[0] :,]
+            for tensor, shape in zip([z0[0]], After_processing_sc_data_shape)
+        ]
 
         latent_sc += [z0[1]] if len(z0) > 1 else []
         latent_st += [z0[2]] if len(z0) > 2 else []
@@ -271,7 +329,7 @@ def scsm_fit_predict(
     all_latent_st = latent_st + [latent_image]
     print(len(latent_sc), len(all_latent_st))
 
-    sum_cos_sim =cos_sim(latent_sc[0], all_latent_st[0])
+    sum_cos_sim = cos_sim(latent_sc[0], all_latent_st[0])
     # sc = latent_sc[0].detach().cpu().numpy()
     # st = all_latent_st[0].detach().cpu().numpy()
     # img = all_latent_st[1].detach().cpu().numpy()
@@ -282,7 +340,7 @@ def scsm_fit_predict(
 
     # for j in range(n_features_st):
     #     print(j)
-        
+
     #     Y = np.vstack((st[j, :], img[j, :])).T
 
     #     for i in range(n_features_sc):
@@ -297,15 +355,20 @@ def scsm_fit_predict(
     #         correlation_matrix = np.corrcoef(X_c.T, Y_c.T)
     #         sum_cos_sim[i, j] = correlation_matrix[0, 1]  # 取典型相关系数
 
-
     df = pd.DataFrame()
-    df['total_loss'] = loss
-    df['gene_reconstruction_loss'] = gene_reconstruction_loss
-    df['image_reconstruction_loss'] = image_reconstruction_loss
-    df['trip_loss'] = trip_loss
-    df['st_image_loss'] = image_loss
-    df.to_csv('loss.csv', index=False, header=True)
+    df["total_loss"] = loss
+    df["gene_reconstruction_loss"] = gene_reconstruction_loss
+    df["image_reconstruction_loss"] = image_reconstruction_loss
+    df["trip_loss"] = trip_loss
+    df["st_image_loss"] = image_loss
+    df.to_csv("loss.csv", index=False, header=True)
 
     torch.cuda.empty_cache()
 
-    return sum_cos_sim, reconstructed_data[0].detach().cpu().numpy(), latent_sc, latent_st, latent_image
+    return (
+        sum_cos_sim,
+        reconstructed_data[0].detach().cpu().numpy(),
+        latent_sc,
+        latent_st,
+        latent_image,
+    )

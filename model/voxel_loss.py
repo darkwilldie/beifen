@@ -20,7 +20,8 @@ import torch
 #         loss_columns = F.cross_entropy(matrix.t(), torch.arange(matrix.size(0)).to(self.device))
 #         loss = (loss_rows + loss_columns)/2
 #         return loss
-    
+
+
 class Voxel_loss(nn.Module):
     def __init__(self, margin):
         super(Voxel_loss, self).__init__()
@@ -29,14 +30,15 @@ class Voxel_loss(nn.Module):
     def forward(self, cell_feature, latent_st):
         device = cell_feature.device  # 自动获取设备
 
-
         cell_feature = F.normalize(cell_feature, dim=1)
         latent_st = F.normalize(latent_st, dim=1)
         matrix = torch.matmul(cell_feature, latent_st.t())
 
         # 计算交叉熵损失
         loss_rows = F.cross_entropy(matrix, torch.arange(matrix.size(0), device=device))
-        loss_columns = F.cross_entropy(matrix.t(), torch.arange(matrix.size(0), device=device))
+        loss_columns = F.cross_entropy(
+            matrix.t(), torch.arange(matrix.size(0), device=device)
+        )
         loss = (loss_rows + loss_columns) / 2
 
         return loss
