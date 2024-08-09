@@ -15,13 +15,17 @@ print(sum_tensor)
 print(sum_tensor.shape)
 # print(cos_sim_sc_image,cos_sim_sc_st,sum_tensor)
 
-sc_rna_path = f"/home/yanghl/zhushijia/model_new_zhu/data_process/{name}/process_sc_rna_data.csv"  # [1289, 6025]
+sc_rna_path = (
+    f"E:/Omics/beifen/datasets/数据/{name}/process_sc_rna_data.csv"  # [1289, 6025]
+)
 sc_rna = pd.read_csv(sc_rna_path)
-st_rna_path = f"//home/yanghl/zhushijia/model_new_zhu/data_process/{name}/cell_st_rna_data.csv"  # [189, 6025]
+st_rna_path = (
+    f"E:/Omics/beifen/datasets/数据/{name}/cell_st_rna_data.csv"  # [189, 6025]
+)
 st_rna = pd.read_csv(st_rna_path)
-cell_feature_path = f"/home/yanghl/zhushijia/model_new_zhu/data_process/{name}/new_cell_deep_feature.csv"
+cell_feature_path = f"E:/Omics/beifen/datasets/数据/{name}/new_cell_deep_feature.csv"
 cell_feature = pd.read_csv(cell_feature_path)
-cell_id_path = f"/home/yanghl/zhushijia/model_new_zhu/data_process/{name}/cell_id.csv"
+cell_id_path = f"E:/Omics/beifen/datasets/数据/{name}/cell_id.csv"
 cell_id = pd.read_csv(cell_id_path)
 
 sc_rna.columns.values[0] = "spot"
@@ -51,7 +55,7 @@ print(sum_tensor)
 
 
 cluster_type_to_cell_csv = pd.read_csv(
-    "/home/yanghl/zhushijia/data/Single cell/metadata/CLUSTER_AND_SUBCLUSTER_INDEX.txt",
+    "E:/Omics/data_and_code/Single cell/metadata/CLUSTER_AND_SUBCLUSTER_INDEX.txt",
     sep="\t",
 )
 print(cluster_type_to_cell_csv)

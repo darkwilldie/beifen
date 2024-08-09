@@ -247,11 +247,11 @@ def scsm_fit_predict(
             cell_feature.to(device)
         )
 
-        print("latent_image:", latent_image.shape)
+        # print("latent_image:", latent_image.shape)
 
-        print("len of z0:", len(z0))
-        print("z0[0]:", z0[0].shape)
-        print("After_processing_sc_data_shape:", After_processing_sc_data_shape)
+        # print("len of z0:", len(z0))
+        # print("z0[0]:", z0[0].shape)
+        # print("After_processing_sc_data_shape:", After_processing_sc_data_shape)
         latent_sc = [
             tensor[: shape[0],]
             for tensor, shape in zip([z0[0]], After_processing_sc_data_shape)
@@ -260,8 +260,8 @@ def scsm_fit_predict(
             tensor[shape[0] :,]
             for tensor, shape in zip([z0[0]], After_processing_sc_data_shape)
         ]
-        print("latent_sc:", latent_sc[0].shape)
-        print("latent_st:", latent_st[0].shape)
+        # print("latent_sc:", latent_sc[0].shape)
+        # print("latent_st:", latent_st[0].shape)
 
         latent_sc += [z0[1]] if len(z0) > 1 else []
         latent_st += [z0[2]] if len(z0) > 2 else []
@@ -329,31 +329,31 @@ def scsm_fit_predict(
     all_latent_st = latent_st + [latent_image]
     print(len(latent_sc), len(all_latent_st))
 
-    sum_cos_sim = cos_sim(latent_sc[0], all_latent_st[0])
-    # sc = latent_sc[0].detach().cpu().numpy()
-    # st = all_latent_st[0].detach().cpu().numpy()
-    # img = all_latent_st[1].detach().cpu().numpy()
+    # sum_cos_sim = cos_sim(latent_sc[0], all_latent_st[0])
+    sc = latent_sc[0].detach().cpu().numpy()
+    st = all_latent_st[0].detach().cpu().numpy()
+    img = all_latent_st[1].detach().cpu().numpy()
 
-    # n_features_sc = sc.shape[0]
-    # n_features_st = st.shape[0]
-    # sum_cos_sim = np.zeros((n_features_sc, n_features_st))
+    n_features_sc = sc.shape[0]
+    n_features_st = st.shape[0]
+    sum_cos_sim = np.zeros((n_features_sc, n_features_st))
 
-    # for j in range(n_features_st):
-    #     print(j)
+    for j in tqdm(range(n_features_st)):
+        # print(j)
 
-    #     Y = np.vstack((st[j, :], img[j, :])).T
+        Y = np.vstack((st[j, :], img[j, :])).T
 
-    #     for i in range(n_features_sc):
-    #         X = sc[i, :].reshape(-1, 1) # 将sc的列转换为列矩阵
+        for i in range(n_features_sc):
+            X = sc[i, :].reshape(-1, 1)  # 将sc的列转换为列矩阵
 
-    #         # 创建并拟合CCA模型
-    #         cca = CCA(n_components=1)
-    #         cca.fit(X, Y)
+            # 创建并拟合CCA模型
+            cca = CCA(n_components=1)
+            cca.fit(X, Y)
 
-    #         # 计算典型相关系数
-    #         X_c, Y_c = cca.transform(X, Y)
-    #         correlation_matrix = np.corrcoef(X_c.T, Y_c.T)
-    #         sum_cos_sim[i, j] = correlation_matrix[0, 1]  # 取典型相关系数
+            # 计算典型相关系数
+            X_c, Y_c = cca.transform(X, Y)
+            correlation_matrix = np.corrcoef(X_c.T, Y_c.T)
+            sum_cos_sim[i, j] = correlation_matrix[0, 1]  # 取典型相关系数
 
     df = pd.DataFrame()
     df["total_loss"] = loss

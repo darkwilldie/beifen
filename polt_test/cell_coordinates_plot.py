@@ -1,11 +1,12 @@
 import pandas as pd
 
 type = "sum"
+# name = "section2"
 name = "section2"
 
 image_resize = 0.1
 cell_coordinates_csv = pd.read_csv(
-    f"/home/yanghl/zhushijia/data/ST image/{name}/cells_on_spot.csv",
+    f"E:/Omics/data_and_code/ST image/{name}/cells_on_spot.csv",
     usecols=["cell_id", "spot", "pixel_x", "pixel_y"],
 )
 cell_coordinates_csv = cell_coordinates_csv.drop_duplicates(subset=["cell_id"])
@@ -19,14 +20,17 @@ cell_coordinates_csv.rename(columns={"pixel_x": "X", "pixel_y": "Y"}, inplace=Tr
 print(cell_coordinates_csv)
 
 cell_type_csv = pd.read_csv(
-    f"plot_csv/{name}/{type}_spot_cell_type.csv", usecols=["cell_id"]
+    f"E:/Omics/beifen/plot_csv/{name}/{type}_spot_cell_type.csv",
+    usecols=["cell_id"],
 )
 
 merged_df = pd.merge(
     cell_type_csv, cell_coordinates_csv, on="cell_id", how="left"
 ).dropna()
 print(merged_df)
-merged_df.to_csv(f"plot_csv/{name}/{type}_cell_coordinates.csv", index=False)
+merged_df.to_csv(
+    f"E:/Omics/beifen/plot_csv/{name}/{type}_cell_coordinates.csv", index=False
+)
 
 # quit()
 
@@ -35,12 +39,14 @@ from PIL import Image
 Image.MAX_IMAGE_PIXELS = 1115134080
 from PIL import Image, ImageDraw
 
-# 打开图像文件   Visium_FFPE_Mouse_Brain_image.jpg   CytAssist_FFPE_Mouse_Brain_Rep1_tissue_image.tif
+# 打开图像文件   Visium_FFPE_Mouse_Brain_image.jpg   CytAssist_FFPE_Mouse_Brain_Rep1_tissue_image.tif  CytAssist_FFPE_Mouse_Brain_Rep2_tissue_image.tif
 image = Image.open(
-    f"/home/yanghl/zhushijia/data/ST image/{name}/CytAssist_FFPE_Mouse_Brain_Rep2_tissue_image.tif"
+    f"E:/Omics/data_and_code/ST image/{name}/CytAssist_FFPE_Mouse_Brain_Rep2_tissue_image.tif"
 )
+# print(image.width, image.height)
 new_width = int(image.width * image_resize)
 new_height = int(image.height * image_resize)
+# print(new_width, new_height)
 resized_image = image.resize((new_width, new_height))
 
 resized_image.save(

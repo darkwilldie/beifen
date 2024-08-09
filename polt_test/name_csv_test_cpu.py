@@ -5,8 +5,9 @@ import os
 
 type = "sum"
 name = "section2"
+# name = "Mouse_brain_hippocampus_STexpr_cellSegmentation"
 # torch_path = f'{name}.pt'
-torch_path = f"section2.pt"
+torch_path = f"section2_cca.pt"
 
 tensor_tuple = torch.load(torch_path, map_location="cpu")
 sum_tensor = tensor_tuple
@@ -15,19 +16,24 @@ print(sum_tensor)
 print(sum_tensor.shape)
 # print(cos_sim_sc_image,cos_sim_sc_st,sum_tensor)
 
-torch_path1 = f"test_cossim/latent_sc_st_section2.pt"
+torch_path1 = f"test_cossim/original_sc_st_section2.pt"
+# torch_path1 = f"E:/Omics/beifen/test_cossim/original_sc_st_Mouse_brain.pt"
 tensor_tuple1 = torch.load(torch_path1, map_location="cpu")
 signs_a = torch.sign(tensor_tuple1).detach().cpu().numpy()
 sum_tensor = signs_a * np.abs(sum_tensor)
 print(sum_tensor)
 
-sc_rna_path = f"/home/yanghl/zhushijia/model_new_zhu/data_process/{name}/process_sc_rna_data.csv"  # [1289, 6025]
+sc_rna_path = (
+    f"E:/Omics/beifen/datasets/数据/{name}/process_sc_rna_data.csv"  # [1289, 6025]
+)
 sc_rna = pd.read_csv(sc_rna_path)
-st_rna_path = f"//home/yanghl/zhushijia/model_new_zhu/data_process/{name}/cell_st_rna_data.csv"  # [189, 6025]
+st_rna_path = (
+    f"E:/Omics/beifen/datasets/数据/{name}/cell_st_rna_data.csv"  # [189, 6025]
+)
 st_rna = pd.read_csv(st_rna_path)
-cell_feature_path = f"/home/yanghl/zhushijia/model_new_zhu/data_process/{name}/new_cell_deep_feature.csv"
+cell_feature_path = f"E:/Omics/beifen/datasets/数据/{name}/new_cell_deep_feature.csv"
 cell_feature = pd.read_csv(cell_feature_path)
-cell_id_path = f"/home/yanghl/zhushijia/model_new_zhu/data_process/{name}/cell_id.csv"
+cell_id_path = f"E:/Omics/beifen/datasets/数据/{name}/cell_id.csv"
 cell_id = pd.read_csv(cell_id_path)
 
 sc_rna.columns.values[0] = "spot"
@@ -57,7 +63,7 @@ print(sum_tensor)
 
 
 cluster_type_to_cell_csv = pd.read_csv(
-    "/home/yanghl/zhushijia/data/Single cell/metadata/CLUSTER_AND_SUBCLUSTER_INDEX.txt",
+    "E:/Omics/data_and_code/Single cell/metadata/CLUSTER_AND_SUBCLUSTER_INDEX.txt",
     sep="\t",
 )
 print(cluster_type_to_cell_csv)
@@ -76,8 +82,10 @@ merged_df = pd.merge(
 ).dropna()
 print(merged_df)
 
+print(merged_df.info())
+
 ####
-grouped_df = merged_df.groupby("CLUSTER").mean()
+grouped_df = merged_df.drop(columns=["sc_name"]).groupby("CLUSTER").mean()
 print(grouped_df)
 grouped_df = grouped_df.drop(["Ependymal", "GABAergic"], axis=0)
 
