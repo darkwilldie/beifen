@@ -5,4 +5,8 @@
 *.npz
 *.npy
 *.jpg
-
+*.zip
+*.txt
+*.tif
+*.tsv
+*checkpoint.py
