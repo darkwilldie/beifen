@@ -5,7 +5,7 @@ type = "sum"
 name = "test_500"
 
 cell_coor = pd.read_csv(
-    f"/home/yanghl/zhushijia/model_new_zhu/model_test1/plot_csv/{name}/{type}_cell_coordinates.csv"
+    f"/root/beifen/plot_csv/test_500/sum_cell_coordinates.csv"
 )
 print(cell_coor)
 cell_contour_path = f"/home/yanghl/zhushijia/data/ST image/human/cell_contour/"

@@ -6,7 +6,7 @@ import os
 type = "sum"
 name = "test_500"
 # sum
-torch_path = f"/home/yanghl/zhushijia/model_new_zhu/general_model/human/all.pt"
+torch_path = f"/root/beifen/test_500.pt"
 
 import pandas as pd
 
@@ -18,10 +18,10 @@ print(sum_tensor)
 print(sum_tensor.shape)
 # print(cos_sim_sc_image,cos_sim_sc_st,sum_tensor)
 
-sc_rna_path = f"/home/yanghl/zhushijia/model_new_zhu/data_process/{name}/process_sc_rna_data.csv"  # [1289, 6025]
+sc_rna_path = f"/root/beifen/data/{name}/process_sc_rna_data.csv"  # [1289, 6025]
 sc_rna = pd.read_csv(sc_rna_path)
 
-cell_id_path = f"/home/yanghl/zhushijia/model_new_zhu/data_process/{name}/cell_id.csv"
+cell_id_path = f"/root/beifen/data/{name}/cell_id.csv"
 cell_id = pd.read_csv(cell_id_path)
 
 sc_rna.columns.values[0] = "spot"
@@ -48,7 +48,7 @@ sum_tensor.columns.values[0] = "sc_name"
 print(sum_tensor)
 
 cluster_type_to_cell_csv = pd.read_csv(
-    "/home/yanghl/zhushijia/data/ST image/human/Wu_etal_2021_BRCA_scRNASeq/metadata.csv"
+    "/root/beifen/ST image/human/Wu_etal_2021_BRCA_scRNASeq/metadata.csv"
 )
 cluster_type_to_cell_csv = cluster_type_to_cell_csv[["Unnamed: 0", "celltype_major"]]
 cluster_type_to_cell_csv = cluster_type_to_cell_csv.rename(
@@ -74,7 +74,7 @@ else:
     print("ID列没有重复值")
 
 
-grouped_df = merged_df.groupby("CLUSTER").mean()
+grouped_df = merged_df.drop(columns=["sc_name"]).groupby("CLUSTER").mean()
 print(grouped_df)
 
 max_index_per_column = grouped_df.idxmax()

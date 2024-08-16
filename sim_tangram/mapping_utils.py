@@ -7,7 +7,8 @@ import pandas as pd
 import scanpy as sc
 import torch
 import logging
-from . import mapping_optimizer as mo
+from . import mapping_optimizer_CCA as mo
+
 # from . import utils as ut
 
 # from torch.nn.functional import cosine_similarity
@@ -15,10 +16,10 @@ from . import mapping_optimizer as mo
 logging.getLogger().setLevel(logging.INFO)
 
 
-
 def map_cells_to_space(
-    single_cell, 
+    single_cell,
     spatial,
+    image,
     device="cpu",
     learning_rate=0.1,
     num_epochs=1000,
@@ -31,7 +32,7 @@ def map_cells_to_space(
 ):
     """
     Map single cell data (`adata_sc`) on spatial data (`adata_sp`).
-    
+
     Args:
         adata_sc (AnnData): single cell data
         adata_sp (AnnData): gene spatial data
@@ -58,20 +59,22 @@ def map_cells_to_space(
         The `uns` field of the returned AnnData contains the training genes.
     """
 
-    S = np.array(single_cell.cpu().detach().numpy(), dtype="float32",)
+    S = np.array(
+        single_cell.cpu().detach().numpy(),
+        dtype="float32",
+    )
     G = np.array(spatial.cpu().detach().numpy(), dtype="float32")
-
+    F = np.array(image.cpu().detach().numpy(), dtype="float32")
 
     # Choose device
     device = torch.device(device)  # for gpu
 
-        
-    '''
+    """
         lambda_d=0,
         lambda_g1=1,
         lambda_g2=0,
         lambda_r=0,
-    '''
+    """
 
     hyperparameters = {
         "lambda_d": lambda_d,  # KL (ie density) term
@@ -81,15 +84,21 @@ def map_cells_to_space(
     }
 
     mapper = mo.Mapper(
-        S=S, G=G, device=device, random_state=random_state, **hyperparameters,
+        S=S,
+        G=G,
+        image=F,
+        device=device,
+        random_state=random_state,
+        **hyperparameters,
     )
 
     # TODO `train` should return the loss function
 
     mapping_matrix = mapper.train(
-        learning_rate=learning_rate, num_epochs=num_epochs, print_each=print_each,
+        learning_rate=learning_rate,
+        num_epochs=num_epochs,
+        print_each=print_each,
+        batch_size=1289
     )
-
-
 
     return mapping_matrix

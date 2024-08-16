@@ -13,7 +13,7 @@ sys.path.append('tangram_src')
 np.random.seed(42)
 
 def read_csv_and_run_tangram(
-    path_csv_single_cell, path_csv_spatial, path_output=None,
+    path_csv_single_cell, path_csv_spatial,image, path_output=None,
     num_epochs=500,
     device='cuda:2'):
     """
@@ -42,7 +42,7 @@ def read_csv_and_run_tangram(
     device = single_cell.device 
     # 运行 Tangram 映射
     map_result = mapping_utils.map_cells_to_space(
-        single_cell, spatial,
+        single_cell, spatial, image,
         num_epochs=num_epochs,
         random_state=32,
         device=device,

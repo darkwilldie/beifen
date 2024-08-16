@@ -92,7 +92,9 @@ def main(params):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(42)
 
-    data_path = os.path.join(params.data_dir, "processed_data", "data.npz")
+    data_path = os.path.join(
+        params.data_dir, params.dataset, "processed_data", "data.npz"
+    )
     # data_path = os.path.join('')
 
     if os.path.exists(data_path):
@@ -119,15 +121,15 @@ def main(params):
         print("%" * 50)
         print("data_path not exists:", data_path)
         params.sing_cell_multi_omic_path = [
-            os.path.join(params.data_dir, path)
+            os.path.join(params.data_dir, params.dataset, path)
             for path in params.sing_cell_multi_omic_path
         ]
         params.spatial_transcriptome_multi_omic_path = [
-            os.path.join(params.data_dir, path)
+            os.path.join(params.data_dir, params.dataset, path)
             for path in params.spatial_transcriptome_multi_omic_path
         ]
         params.spatial_cell_feature_path = os.path.join(
-            params.data_dir, params.spatial_cell_feature_path
+            params.data_dir, params.dataset, params.spatial_cell_feature_path
         )
 
         # Load single-cell and spatial transcriptome data
@@ -314,11 +316,11 @@ def main(params):
         # print('st_data_not_intersection:', st_data_not_intersection)
 
         # save the processed data as numpy arrays
-        path = os.path.join(params.data_dir, "processed_data")
-        os.makedirs(path, exist_ok=True)
+        save_path = os.path.join(params.data_dir, params.dataset, "processed_data")
+        os.makedirs(save_path, exist_ok=True)
         # print('After_processing_sc_data_shape:', After_processing_sc_data_shape)
         np.savez(
-            os.path.join(path, "data.npz"),
+            os.path.join(save_path, "data.npz"),
             intersection_sc_st_cluster,
             sc_data_not_intersection_cluster,
             st_data_not_intersection_cluster,
@@ -420,10 +422,11 @@ if __name__ == "__main__":
     parser.add_argument("--cluster_number", default=5, type=int)
     parser.add_argument("--weight_name", default="section2", type=str)
     parser.add_argument(
-        "--data_dir",
-        default="/home/yanghl/zhushijia/model_new_zhu/data_process/section2",
+        "--dataset",
+        default="section2",
         type=str,
     )
+    parser.add_argument("--data_dir", default="/root/beifen/data", type=str)
     params = parser.parse_args()
 
 if __name__ == "__main__":

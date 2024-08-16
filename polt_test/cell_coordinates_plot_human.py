@@ -1,11 +1,11 @@
 import pandas as pd
 
 type = "sum"
-name = "section2"
+name = "test_500"
 
 image_resize = 0.1
 cell_coordinates_csv = pd.read_csv(
-    f"/home/yanghl/zhushijia/data/ST image/human/cells_on_spot.csv",
+    f"/root/beifen/ST image/human/cells_on_spot.csv",
     usecols=["cell_id", "spot", "pixel_x", "pixel_y"],
 )
 cell_coordinates_csv = cell_coordinates_csv.drop_duplicates(subset=["cell_id"])
@@ -37,7 +37,7 @@ from PIL import Image, ImageDraw
 
 # 打开图像文件   Visium_FFPE_Mouse_Brain_image.jpg   CytAssist_FFPE_Mouse_Brain_Rep1_tissue_image.tif
 image = Image.open(
-    f"/home/yanghl/zhushijia/data/ST image/human/CytAssist_FFPE_Mouse_Brain_Rep2_tissue_image.tif"
+    f"/root/beifen/ST image/human/Visium_FFPE_Human_Breast_Cancer_image.tif"
 )
 new_width = int(image.width * image_resize)
 new_height = int(image.height * image_resize)
