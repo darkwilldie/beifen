@@ -15,15 +15,42 @@ from sklearn.cross_decomposition import CCA
 from sklearn.preprocessing import StandardScaler
 import torch.linalg as LA
 from tqdm import tqdm
+import time
 
+def torch_corrcoef(X, Y, batch_size=3000):
+    X_demean = X - torch.mean(X, dim=1, keepdim=True)
+    Y_demean = Y - torch.mean(Y, dim=1, keepdim=True)
+    cov_matrix = torch.matmul(X_demean.transpose(1, 2), Y_demean) / (X.shape[1] - 1)
+    print('cov_matrix', cov_matrix.shape)
+    X_std = torch.std(X_demean, dim=1)
+    X_std = X_std.view(X_std.shape[0], -1)
+    Y_std = torch.std(Y_demean, dim=1)
+    Y_std = Y_std.view(Y_std.shape[0], -1)
 
-def torch_corrcoef(X, Y):
-    X_demean = X - torch.mean(X, dim=0, keepdim=True)
-    Y_demean = Y - torch.mean(Y, dim=0, keepdim=True)
-    cov_matrix = torch.matmul(X_demean.transpose(1, 2), Y_demean) / (X.shape[0] - 1)
-    X_std = torch.std(X_demean, dim=0).flatten()
-    Y_std = torch.std(Y_demean, dim=0).flatten()
-    corr_matrix = cov_matrix / torch.outer(X_std, Y_std)
+    # corr_matrix = cov_matrix / torch.outer(X_std, Y_std)
+    corr_matrix = torch.zeros_like(cov_matrix)
+    
+    num_batches = (X_std.shape[0] + batch_size - 1) // batch_size
+    
+    for i in tqdm(range(num_batches)):
+        start_idx = i * batch_size
+        end_idx = min((i + 1) * batch_size, X_std.shape[0])
+        
+        X_std_batch = X_std[start_idx:end_idx, :]
+        Y_std_batch = Y_std[start_idx:end_idx, :]
+        # print('X_std_batch', X_std_batch.shape)
+        # print('Y_std_batch', Y_std_batch.shape)
+        
+        # out = torch.outer(X_std_batch, Y_std_batch)
+        # print('out', out.shape)
+        for j in range(X_std_batch.shape[0]):
+        # out = torch.einsum('bi,bj->bij', X_std_batch, Y_std_batch)
+            out = torch.outer(X_std_batch[j, :], Y_std_batch[j, :])
+            # print('out', out.shape)
+
+        corr_matrix[start_idx:end_idx, :] = cov_matrix[start_idx:end_idx, :] / out
+
+    print('corr_matrix', corr_matrix.shape)
     return corr_matrix
 
 
@@ -37,8 +64,6 @@ def torch_cca(X, Y, n_components=2, reg_param=1e-5):
     X = X - X.mean(dim=0)
     Y = Y - Y.mean(dim=0)
 
-    # print(X.shape)
-    # assert False
     n = X.size(1) - 1
 
     # 确保 X 和 Y 是三维矩阵
@@ -64,36 +89,49 @@ def torch_cca(X, Y, n_components=2, reg_param=1e-5):
     chol_yy = LA.cholesky(cov_yy)
 
     # 白化
-    # whitened_x = LA.solve_triangular(chol_xx, X.T, upper=False).T
-    # whitened_y = LA.solve_triangular(chol_yy, Y.T, upper=False).T
     whitened_x = torch.empty_like(X)
     whitened_y = torch.empty_like(Y)
 
-    for i in range(X.size(0)):
-        whitened_x[i] = LA.solve_triangular(chol_xx[i], X[i].T, upper=False).T
-        whitened_y[i] = LA.solve_triangular(chol_yy[i], Y[i].T, upper=False).T
+    st_time1 = time.time()
+    whitened_x = LA.solve_triangular(chol_xx, X.transpose(1, 2), upper=False).transpose(1, 2)
+    whitened_y = LA.solve_triangular(chol_yy, Y.transpose(1, 2), upper=False).transpose(1, 2)
+
+    end_time1 = time.time()
+    print('time of process matrix:', end_time1 - st_time1)
 
     # 奇异值分解
-    # u, _, v = torch.svd(torch.mm(whitened_x.T, whitened_y))
     u, _, v = torch.svd(torch.matmul(whitened_x.transpose(1, 2), whitened_y))
 
     X_c = torch.matmul(whitened_x, u[:, :, :n_components])
     Y_c = torch.matmul(whitened_y, v[:, :, :n_components])
 
     # 使用PyTorch计算的相关系数矩阵
+    print('X_c', X_c.shape)
+    print('Y_c', Y_c.shape)
+
+    st_time2 = time.time()
     correlations_matrix = torch_corrcoef(X_c, Y_c)
+    end_time2 = time.time()
+    print('time of corrcoef:', end_time2 - st_time2)
 
     return X_c, Y_c, correlations_matrix
 
 
+# sc_torch.shape = (43757, 512)
+# st_torch.shape = (512, 43757, 2)
 def calculate_correlations(sc_torch, st_torch):
     sum_cos_sim1 = 0
 
     st_torch = st_torch.permute(1, 0, 2)
     sc_torch = sc_torch.unsqueeze(-1)
+    print('sc_torch', sc_torch.shape)
+    print('st_torch', st_torch.shape)
+    # start_time = time.time()
     X_c_torch, Y_c_torch, torch_correlations = torch_cca(
         sc_torch, st_torch, n_components=1
     )
+    # end_time = time.time()
+    # print('time of torch_cca:', end_time - start_time)
     torch_correlations = torch_correlations.sum()
 
     sum_cos_sim1 = sum_cos_sim1 + torch_correlations  # 取典型相关系数
@@ -134,6 +172,12 @@ class Mapper:
             (self.G.unsqueeze(0), self.image.unsqueeze(0)), dim=0
         ).permute(2, 1, 0)
 
+        print('$'*50)
+        print('S', self.S.shape)
+        print('G', self.G.shape)
+        print('image', self.image.shape)
+        print('spot_feature', self.spot_feature.shape)
+
         self.lambda_g1 = lambda_g1
         self.lambda_d = lambda_d
         self.lambda_g2 = lambda_g2
@@ -153,7 +197,13 @@ class Mapper:
         # M_batch = softmax(self.M[start_idx:end_idx, :], dim=1)
         # print(M_batch.t().shape,S_batch.shape,G.shape)
         # quit()
+        print('M_block.shape', M_block.shape)
+        print('S_batch.shape', S_batch.shape)
         G_pred = torch.matmul(M_block.t(), S_batch)
+        # G_pred.shape = (43757, 512)
+        # G.shape = (512, 43757, 2)
+        print('G_pred.shape', G_pred.shape)
+        print('G.shape', G.shape)
         gv_term = self.lambda_g1 * calculate_correlations(G_pred, G)
         print(gv_term)
         return -gv_term
@@ -175,12 +225,17 @@ class Mapper:
                 # M_block = self.M[start_idx:end_idx]
                 M_block = softmax(self.M[start_idx:end_idx], dim=1)
 
+                start_time = time.time()
                 loss = self._loss_fn(S_batch, self.spot_feature, M_block)
+                end_time1 = time.time()
+                print('time of loss:', end_time1 - start_time)
                 # print(loss.shape)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
                 epoch_loss += loss.item()
+                end_time2 = time.time()
+                print('time of backward:', end_time2 - end_time1)
 
             if epoch % print_each == 0:
                 print(f"Epoch {epoch}: Loss {epoch_loss / num_batches}")

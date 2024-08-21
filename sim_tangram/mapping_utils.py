@@ -98,7 +98,7 @@ def map_cells_to_space(
         learning_rate=learning_rate,
         num_epochs=num_epochs,
         print_each=print_each,
-        batch_size=1289
+        batch_size=S.shape[0],
     )
 
     return mapping_matrix
