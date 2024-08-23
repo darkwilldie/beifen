@@ -14,7 +14,7 @@ np.random.seed(42)
 
 def read_csv_and_run_tangram(
     path_csv_single_cell, path_csv_spatial,image, path_output=None,
-    num_epochs=500,
+    num_epochs=200,
     device='cuda:2'):
     """
     读取 CSV 文件并构建假 Anndata 以运行 Tangram。

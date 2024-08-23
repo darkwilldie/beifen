@@ -4,17 +4,28 @@ import torch
 import os
 
 type = "sum"
-name = "test_500"
+name = "test_1000"
 # sum
-torch_path = f"/root/beifen/test_500.pt"
-
-import pandas as pd
+torch_path = f"test_1000_tangram_cca.pt"
+metadata_path = "/root/beifen/ST_image/human/metadata.csv"
 
 tensor_tuple = torch.load(torch_path, map_location="cpu")
 sum_tensor = tensor_tuple
+
+try:
+    sum_tensor = tensor_tuple.detach().cpu().numpy()
+except AttributeError:
+    sum_tensor = tensor_tuple
+
+# 赋余弦相似度的符号给tangram的张量
+# torch_path1 = f"test_1000_cos.pt"
+# # torch_path1 = f"E:/Omics/beifen/test_cossim/original_sc_st_Mouse_brain.pt"
+# tensor_tuple1 = torch.load(torch_path1, map_location="cpu")
+# signs_a = torch.sign(tensor_tuple1).detach().cpu().numpy()
+# sum_tensor = signs_a * np.abs(sum_tensor)
 # print(sum_tensor)
 # quit()
-print(sum_tensor)
+# print(sum_tensor)
 print(sum_tensor.shape)
 # print(cos_sim_sc_image,cos_sim_sc_st,sum_tensor)
 
@@ -35,7 +46,7 @@ print(len(sc_rna_name))
 print(len(cell_id_spot))
 
 ##############
-sum_tensor = pd.DataFrame(sum_tensor.detach().cpu().numpy())
+sum_tensor = pd.DataFrame(sum_tensor)
 print(sum_tensor)
 # quit()
 sum_tensor = sum_tensor.rename(
@@ -48,7 +59,8 @@ sum_tensor.columns.values[0] = "sc_name"
 print(sum_tensor)
 
 cluster_type_to_cell_csv = pd.read_csv(
-    "/root/beifen/ST image/human/Wu_etal_2021_BRCA_scRNASeq/metadata.csv"
+    # "/root/beifen/ST image/human/Wu_etal_2021_BRCA_scRNASeq/metadata.csv"
+    metadata_path
 )
 cluster_type_to_cell_csv = cluster_type_to_cell_csv[["Unnamed: 0", "celltype_major"]]
 cluster_type_to_cell_csv = cluster_type_to_cell_csv.rename(
@@ -60,7 +72,7 @@ cluster_type_to_cell_csv = cluster_type_to_cell_csv.rename(
 print(cluster_type_to_cell_csv)
 
 merged_df = pd.merge(
-    sum_tensor, cluster_type_to_cell_csv, on="sc_name", how="right"
+    sum_tensor, cluster_type_to_cell_csv, on="sc_name", how="left"
 ).dropna()
 print(merged_df)
 

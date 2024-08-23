@@ -9,5 +9,6 @@
 *.txt
 *.tif
 *.tsv
+*.pdf
 *checkpoint.py
 note.md

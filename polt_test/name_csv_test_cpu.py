@@ -24,16 +24,16 @@ sum_tensor = signs_a * np.abs(sum_tensor)
 print(sum_tensor)
 
 sc_rna_path = (
-    f"E:/Omics/beifen/datasets/数据/{name}/process_sc_rna_data.csv"  # [1289, 6025]
+    f"E:/Omics/beifen/datasets/{name}/process_sc_rna_data.csv"  # [1289, 6025]
 )
 sc_rna = pd.read_csv(sc_rna_path)
 st_rna_path = (
-    f"E:/Omics/beifen/datasets/数据/{name}/cell_st_rna_data.csv"  # [189, 6025]
+    f"E:/Omics/beifen/datasets/{name}/cell_st_rna_data.csv"  # [189, 6025]
 )
 st_rna = pd.read_csv(st_rna_path)
-cell_feature_path = f"E:/Omics/beifen/datasets/数据/{name}/new_cell_deep_feature.csv"
+cell_feature_path = f"E:/Omics/beifen/datasets/{name}/new_cell_deep_feature.csv"
 cell_feature = pd.read_csv(cell_feature_path)
-cell_id_path = f"E:/Omics/beifen/datasets/数据/{name}/cell_id.csv"
+cell_id_path = f"E:/Omics/beifen/datasets/{name}/cell_id.csv"
 cell_id = pd.read_csv(cell_id_path)
 
 sc_rna.columns.values[0] = "spot"

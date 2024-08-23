@@ -337,7 +337,7 @@ def main(params):
     # print(intersection_sc_st, sc_data_not_intersection, st_data_not_intersection)
 
     # Perform data analysis using the processed data
-    sum_cos_sim, reconstructed_data, latent_sc, latent_st, latent_image = (
+    sum_cos_sim, sum_cos_sim2, reconstructed_data, latent_sc, latent_st, latent_image = (
         scsm.scsm_fit_predict(
             intersection_sc_st_cluster,
             sc_data_not_intersection_cluster,
@@ -365,7 +365,8 @@ def main(params):
 
     print("sum_cos_sim.shape:", sum_cos_sim.shape)
     tensor_tuple = sum_cos_sim
-    torch.save(tensor_tuple, params.weight_name + ".pt")
+    torch.save(tensor_tuple, params.weight_name + "_tangram_cca.pt")
+    torch.save(sum_cos_sim2, params.weight_name + "_cos.pt")
 
     df_cos_sim_sc_image = pd.DataFrame(latent_sc[0].cpu().detach().numpy())
     df_cos_sim_sc_st = pd.DataFrame(latent_st[0].cpu().detach().numpy())

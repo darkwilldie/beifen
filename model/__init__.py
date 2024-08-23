@@ -251,9 +251,15 @@ def scsm_fit_predict(
     all_latent_st = latent_st + [latent_image]
     print(len(latent_sc), len(all_latent_st))
 
+    # tangram
     sum_cos_sim = read_csv_and_run_tangram(
         latent_sc[0], all_latent_st[0], all_latent_st[1]
     )
+    # 余弦相似度
+    sum_cos_sim2 = cos_sim(latent_sc[0], all_latent_st[0])
+    # tensor_tuple = sum_cos_sim2
+    # torch.save(tensor_tuple, os.path.join())
+    # CCA
     # sc = latent_sc[0].detach().cpu().numpy()
     # st = all_latent_st[0].detach().cpu().numpy()
     # img = all_latent_st[1].detach().cpu().numpy()
@@ -289,6 +295,7 @@ def scsm_fit_predict(
 
     return (
         sum_cos_sim,
+        sum_cos_sim2,
         reconstructed_data[0].detach().cpu().numpy(),
         latent_sc,
         latent_st,
