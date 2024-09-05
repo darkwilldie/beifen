@@ -6,7 +6,7 @@ import os
 type = "sum"
 name = "test_1000"
 # sum
-torch_path = f"test_1000_tangram_cca.pt"
+torch_path = f"test_1000_test_tangram_cca.pt"
 metadata_path = "/root/beifen/ST_image/human/metadata.csv"
 
 tensor_tuple = torch.load(torch_path, map_location="cpu")
@@ -26,7 +26,7 @@ except AttributeError:
 # print(sum_tensor)
 # quit()
 # print(sum_tensor)
-print(sum_tensor.shape)
+# print(sum_tensor.shape)
 # print(cos_sim_sc_image,cos_sim_sc_st,sum_tensor)
 
 sc_rna_path = f"/root/beifen/data/{name}/process_sc_rna_data.csv"  # [1289, 6025]

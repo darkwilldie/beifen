@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 import argparse
@@ -9,6 +10,9 @@ import phenograph
 import logging
 from sklearn.decomposition import PCA
 import os
+from sim_tangram.train_tangram import read_csv_and_run_tangram
+from sim_tangram.mapping_optimizer_CCA import cos_sim
+from os.path import join, exists
 
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
@@ -337,53 +341,92 @@ def main(params):
     # print(intersection_sc_st, sc_data_not_intersection, st_data_not_intersection)
 
     # Perform data analysis using the processed data
-    sum_cos_sim, sum_cos_sim2, reconstructed_data, latent_sc, latent_st, latent_image = (
-        scsm.scsm_fit_predict(
-            intersection_sc_st_cluster,
-            sc_data_not_intersection_cluster,
-            st_data_not_intersection_cluster,
-            sc_index,
-            st_index,
-            After_processing_sc_data_shape,
-            After_processing_st_data_shape,
-            intersection_sc_st,
-            sc_data_not_intersection,
-            st_data_not_intersection,
-            cell_feature,
-            latent_dim=params.latent_dim,
-            learn_rate=params.learn_rate,
-            optimization_epsilon_epoch=params.epochs,
-            lambda_recon_gene=params.lambda_recon_gene,
-            lambda_infoNCE=params.lambda_infoNCE,
-            lambda_recon_image=params.lambda_recon_image,
-            device_ids=[
-                0,
-            ],  # Specify GPU devices to use
-        )
-    )
-    print("reconstructed_data.shape:", reconstructed_data.shape)
-
-    print("sum_cos_sim.shape:", sum_cos_sim.shape)
-    tensor_tuple = sum_cos_sim
-    torch.save(tensor_tuple, params.weight_name + "_tangram_cca.pt")
-    torch.save(sum_cos_sim2, params.weight_name + "_cos.pt")
-
-    df_cos_sim_sc_image = pd.DataFrame(latent_sc[0].cpu().detach().numpy())
-    df_cos_sim_sc_st = pd.DataFrame(latent_st[0].cpu().detach().numpy())
-    df_latent_image = pd.DataFrame(latent_image.cpu().detach().numpy())
-
-    result_dir = "result"
+    result_dir = join("result", params.dataset)
     os.makedirs(result_dir, exist_ok=True)
 
-    df_cos_sim_sc_image.to_csv(
-        os.path.join(result_dir, "latent_sc.csv"), index=False, header=True
+    trained_data = [
+        join(result_dir, "latent_sc.csv"),
+        join(result_dir, "latent_st.csv"),
+        join(result_dir, "latent_image.csv"),
+    ]
+
+    need_to_train = False
+    for path in trained_data:
+        if not exists(path):
+            need_to_train = True
+            break
+            
+    if need_to_train:
+        print("Training the model...")
+        reconstructed_data, latent_sc, latent_st, latent_image = (
+            scsm.scsm_fit_predict(
+                intersection_sc_st_cluster,
+                sc_data_not_intersection_cluster,
+                st_data_not_intersection_cluster,
+                sc_index,
+                st_index,
+                After_processing_sc_data_shape,
+                After_processing_st_data_shape,
+                intersection_sc_st,
+                sc_data_not_intersection,
+                st_data_not_intersection,
+                cell_feature,
+                latent_dim=params.latent_dim,
+                learn_rate=params.learn_rate,
+                optimization_epsilon_epoch=params.epochs,
+                lambda_recon_gene=params.lambda_recon_gene,
+                lambda_infoNCE=params.lambda_infoNCE,
+                lambda_recon_image=params.lambda_recon_image,
+                device_ids=[
+                    0,
+                ],  # Specify GPU devices to use
+            )
+        )
+        # save trained data
+        df_cos_sim_sc_image = pd.DataFrame(latent_sc.cpu().detach().numpy())
+        df_cos_sim_sc_st = pd.DataFrame(latent_st.cpu().detach().numpy())
+        df_latent_image = pd.DataFrame(latent_image.cpu().detach().numpy())
+
+        df_cos_sim_sc_image.to_csv(
+            trained_data[0], index=False, header=True
+        )
+        df_cos_sim_sc_st.to_csv(
+            trained_data[1], index=False, header=True
+        )
+        df_latent_image.to_csv(
+            trained_data[2], index=False, header=True
+        )
+        print("saved trained data to:", trained_data)
+    else:
+        print("Trained data already exists. Loading the data...")
+        latent_sc = pd.read_csv(trained_data[0])
+        latent_st = pd.read_csv(trained_data[1])
+        latent_image = pd.read_csv(trained_data[2])
+
+        latent_sc = torch.tensor(latent_sc.values)
+        latent_st = torch.tensor(latent_st.values)
+        latent_image = torch.tensor(latent_image.values)
+        print("loaded trained data from:", trained_data)
+
+    print("latent_sc.shape:", latent_sc.shape)
+    print("latent_st.shape:", latent_st.shape)
+    print("latent_image.shape:", latent_image.shape)
+
+    # 余弦相似度
+    sum_cos_sim2 = cos_sim(latent_sc, latent_st)
+    print("^" * 50)
+    print("sum_cos_sim2.shape:", sum_cos_sim2.shape)
+
+    # tangram
+    sum_cos_sim = read_csv_and_run_tangram(
+        latent_sc, latent_st, latent_image
     )
-    df_cos_sim_sc_st.to_csv(
-        os.path.join(result_dir, "latent_st.csv"), index=False, header=True
-    )
-    df_latent_image.to_csv(
-        os.path.join(result_dir, "latent_image.csv"), index=False, header=True
-    )
+
+    # print("reconstructed_data.shape:", reconstructed_data.shape)
+    # print("sum_cos_sim.shape:", sum_cos_sim.shape)
+
+    torch.save(sum_cos_sim, params.weight_name + "_tangram_cca.pt")
+    torch.save(sum_cos_sim2, params.weight_name + "_cos.pt")
 
 
 if __name__ == "__main__":

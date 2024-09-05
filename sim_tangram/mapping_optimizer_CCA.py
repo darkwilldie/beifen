@@ -17,7 +17,17 @@ import torch.linalg as LA
 from tqdm import tqdm
 # from model.__init__ import cos_sim
 import time
+import torch.nn.functional as F
 
+
+def cos_sim(sc_feature, other_feature):
+    sc_feature = F.normalize(sc_feature, dim=1)
+    other_feature = F.normalize(other_feature, dim=1)
+    cos_sim_matrix = torch.matmul(sc_feature, other_feature.t())
+    # softmax_output = F.softmax(cos_sim_matrix, dim=1)
+    # print(softmax_output)
+    return cos_sim_matrix
+    
 def torch_corrcoef(X, Y, batch_size=3000):
     X_demean = X - torch.mean(X, dim=1, keepdim=True)
     Y_demean = Y - torch.mean(Y, dim=1, keepdim=True)
@@ -123,14 +133,39 @@ def torch_cca(X, Y, n_components=2, reg_param=1e-5):
 def calculate_correlations(sc_torch, st_torch):
     sum_cos_sim1 = 0
 
+    #? sc_torch.shape = (43757, 512) why not [9000, 512] as the number of cells
+    print('&&sc_torch', sc_torch.shape)
+    print('&&st_torch', st_torch.shape)
+    time1 = time.time()
+    # 余弦相似度
+    sum_cos_sim = cos_sim(sc_torch, st_torch.permute(1, 0, 2)[:,:,0])
+    time2 = time.time()
+    print('time of cos_sim:', time2 - time1)
+
     st_torch = st_torch.permute(1, 0, 2)
     sc_torch = sc_torch.unsqueeze(-1)
-    # print('sc_torch', sc_torch.shape)
-    # print('st_torch', st_torch.shape)
+    print('sc_torch', sc_torch.shape)
+    print('st_torch', st_torch.shape)
     # start_time = time.time()
     X_c_torch, Y_c_torch, torch_correlations = torch_cca(
         sc_torch, st_torch, n_components=1
     )
+    # 获取 sum_tensor 对角线上的元素
+    diagonal_elements = torch.diag(sum_cos_sim)
+    # 获取对角线元素的符号
+    diagonal_signs = torch.sign(diagonal_elements).detach().cpu().reshape(-1, 1, 1)
+    
+    print('shape of diagonal_signs:', diagonal_signs.shape)
+    # print("对角线元素的符号:", diagonal_signs)
+    # 检验对角线元素的符号是否全为1或-1
+    # assert torch.all(diagonal_signs == 1) or torch.all(diagonal_signs == -1)
+    # signs_a = torch.sign(sum_cos_sim).detach().cpu().numpy()
+    # print('signs_a', signs_a.shape)
+    print('torch_correlations', torch_correlations.shape)
+    assert torch_correlations.shape == diagonal_signs.shape
+    # torch_correlations = signs_a * np.abs(torch_correlations)
+    torch_correlations.data = diagonal_signs * torch.abs(torch_correlations)
+
     # end_time = time.time()
     # print('time of torch_cca:', end_time - start_time)
     torch_correlations = torch_correlations.sum()
