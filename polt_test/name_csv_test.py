@@ -7,7 +7,7 @@ from os.path import join
 type = "sum"
 dataset = "section2"
 # torch_path = f'{name}.pt'
-torch_path = f"section2_tangram_cca.pt"
+torch_path = f"section2_every_epoch_tangram_cca.pt"
 data_dir = "/root/beifen/data"
 metadata_path = (
     "/root/beifen/single_cell/metadata/CLUSTER_AND_SUBCLUSTER_INDEX.txt"

@@ -18,12 +18,13 @@ from tqdm import tqdm
 # from model.__init__ import cos_sim
 import time
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 
 def cos_sim(sc_feature, other_feature):
     sc_feature = F.normalize(sc_feature, dim=1)
     other_feature = F.normalize(other_feature, dim=1)
-    cos_sim_matrix = torch.matmul(sc_feature, other_feature.t())
+    cos_sim_matrix = torch.matmul(sc_feature, other_feature.T)
     # softmax_output = F.softmax(cos_sim_matrix, dim=1)
     # print(softmax_output)
     return cos_sim_matrix
@@ -32,7 +33,7 @@ def torch_corrcoef(X, Y, batch_size=3000):
     X_demean = X - torch.mean(X, dim=1, keepdim=True)
     Y_demean = Y - torch.mean(Y, dim=1, keepdim=True)
     cov_matrix = torch.matmul(X_demean.transpose(1, 2), Y_demean) / (X.shape[1] - 1)
-    print('cov_matrix', cov_matrix.shape)
+    # print('cov_matrix', cov_matrix.shape)
     X_std = torch.std(X_demean, dim=1)
     X_std = X_std.view(X_std.shape[0], -1)
     Y_std = torch.std(Y_demean, dim=1)
@@ -61,7 +62,7 @@ def torch_corrcoef(X, Y, batch_size=3000):
 
         corr_matrix[start_idx:end_idx, :] = cov_matrix[start_idx:end_idx, :] / out
 
-    print('corr_matrix', corr_matrix.shape)
+    # print('corr_matrix', corr_matrix.shape)
     return corr_matrix
 
 
@@ -133,38 +134,35 @@ def torch_cca(X, Y, n_components=2, reg_param=1e-5):
 def calculate_correlations(sc_torch, st_torch):
     sum_cos_sim1 = 0
 
-    #? sc_torch.shape = (43757, 512) why not [9000, 512] as the number of cells
-    print('&&sc_torch', sc_torch.shape)
-    print('&&st_torch', st_torch.shape)
-    time1 = time.time()
-    # 余弦相似度
-    sum_cos_sim = cos_sim(sc_torch, st_torch.permute(1, 0, 2)[:,:,0])
-    time2 = time.time()
-    print('time of cos_sim:', time2 - time1)
+    # print('&&sc_torch', sc_torch.shape)
+    # print('&&st_torch', st_torch.shape)
+    # time1 = time.time()
+    # # 余弦相似度
+    # sum_cos_sim = cos_sim(sc_torch, st_torch.permute(1, 0, 2)[:,:,0])
+    # time2 = time.time()
+    # print('time of cos_sim:', time2 - time1)
 
     st_torch = st_torch.permute(1, 0, 2)
     sc_torch = sc_torch.unsqueeze(-1)
-    print('sc_torch', sc_torch.shape)
-    print('st_torch', st_torch.shape)
+    # print('sc_torch', sc_torch.shape)
+    # print('st_torch', st_torch.shape)
     # start_time = time.time()
     X_c_torch, Y_c_torch, torch_correlations = torch_cca(
         sc_torch, st_torch, n_components=1
     )
-    # 获取 sum_tensor 对角线上的元素
-    diagonal_elements = torch.diag(sum_cos_sim)
-    # 获取对角线元素的符号
-    diagonal_signs = torch.sign(diagonal_elements).detach().cpu().reshape(-1, 1, 1)
+    # # 获取 sum_tensor 对角线上的元素
+    # diagonal_elements = torch.diag(sum_cos_sim)
+    # # 获取对角线元素的符号
+    # diagonal_signs = torch.sign(diagonal_elements).detach().cpu().reshape(-1, 1, 1)
     
-    print('shape of diagonal_signs:', diagonal_signs.shape)
-    # print("对角线元素的符号:", diagonal_signs)
-    # 检验对角线元素的符号是否全为1或-1
-    # assert torch.all(diagonal_signs == 1) or torch.all(diagonal_signs == -1)
-    # signs_a = torch.sign(sum_cos_sim).detach().cpu().numpy()
-    # print('signs_a', signs_a.shape)
-    print('torch_correlations', torch_correlations.shape)
-    assert torch_correlations.shape == diagonal_signs.shape
-    # torch_correlations = signs_a * np.abs(torch_correlations)
-    torch_correlations.data = diagonal_signs * torch.abs(torch_correlations)
+    # print('shape of diagonal_signs:', diagonal_signs.shape)
+    # # print("对角线元素的符号:", diagonal_signs)
+    # # signs_a = torch.sign(sum_cos_sim).detach().cpu().numpy()
+    # # print('signs_a', signs_a.shape)
+    # print('torch_correlations', torch_correlations.shape)
+    # assert torch_correlations.shape == diagonal_signs.shape
+    # # torch_correlations = signs_a * np.abs(torch_correlations)
+    # torch_correlations.data = diagonal_signs * torch.abs(torch_correlations)
 
     # end_time = time.time()
     # print('time of torch_cca:', end_time - start_time)
@@ -225,26 +223,42 @@ class Mapper:
         self.M = torch.tensor(
             self.M, device=device, requires_grad=True, dtype=torch.float32
         )
+        print('M', self.M.shape)
+        # assert False
         # self.M = softmax(self.M, dim=1)
 
-    def _loss_fn(self, S_batch, G, M_block):
+    def _loss_fn(self, S_batch, G_with_image, M_block):
         # M_probs = softmax(self.M, dim=1)
-        # M_batch = M_probs[start_idx:end_idx]
-        # M_batch = softmax(self.M[start_idx:end_idx, :], dim=1)
-        # print(M_batch.t().shape,S_batch.shape,G.shape)
-        # quit()
-        # print('M_block.shape', M_block.shape)
-        # print('S_batch.shape', S_batch.shape)
         G_pred = torch.matmul(M_block.t(), S_batch)
+        # M.shape = (9000, 43757)
+        # S.shape = (9000, 512)
         # G_pred.shape = (43757, 512)
-        # G.shape = (512, 43757, 2)
-        # print('G_pred.shape', G_pred.shape)
-        # print('G.shape', G.shape)
-        gv_term = self.lambda_g1 * calculate_correlations(G_pred, G)
+        # G_with_image.shape = (512, 43757, 2)
+        # 计算预测值和真实值之间的相关性（gv_term = (43757, 1, 1)）
+        gv_term = self.lambda_g1 * calculate_correlations(G_pred, G_with_image[:,:,:1])
+
+        # # 计算cos sim(shape ([9000, 43757]))
+        # sum_cos_sim = cos_sim(S_batch, G_with_image[:,:,0].t())
+        # print('sum_cos_sim', sum_cos_sim.shape)
+        # print('M_block', M_block.shape)
+        # assert M_block.shape == sum_cos_sim.shape
+        # #? 赋符号（是给M_block赋符号，而非预测值和真实值之间的相关性），这一步是否合理？
+        # sign_a = torch.sign(sum_cos_sim)
+        # # M_block.data = torch.sign(sum_cos_sim) * torch.abs(M_block)
+        # M_block = sign_a * torch.abs(M_block)
+
         print(gv_term)
         return -gv_term
 
     def train(self, num_epochs, learning_rate=0.1, print_each=100, batch_size=8):
+
+        loss_plot = []
+
+        torch_path1 = f"section2_every_epoch_cos.pt"
+        # torch_path1 = f"E:/Omics/beifen/test_cossim/original_sc_st_Mouse_brain.pt"
+        tensor_tuple1 = torch.load(torch_path1, map_location="cpu")
+        sign_a = torch.sign(tensor_tuple1).float().detach()
+        
         torch.manual_seed(self.random_state)
         optimizer = torch.optim.Adam([self.M], lr=learning_rate)
         print('M.shape', self.M.shape)
@@ -261,21 +275,45 @@ class Mapper:
                 # M_block = self.M[start_idx:end_idx]
                 M_block = softmax(self.M[start_idx:end_idx], dim=1)
 
+                #! 计算cos sim(shape ([9000, 43757]))
+                # sum_cos_sim = cos_sim(S_batch, self.spot_feature[:,:,0].t())
+                # # print('sum_cos_sim', sum_cos_sim.shape)
+                # # print('M_block', M_block.shape)
+                # assert M_block.shape == sum_cos_sim.shape
+                # #? 赋符号（是给M_block赋符号，而非预测值和真实值之间的相关性），这一步是否合理？
+                # sign_a = torch.sign(sum_cos_sim)
+                # sign_a = torch.sign(tensor_tuple1)
+                # M_block.data = torch.sign(sum_cos_sim) * torch.abs(M_block)
+                # M_block = sign_a * torch.abs(M_block)
+
+                # 计算损失
                 # start_time = time.time()
                 loss = self._loss_fn(S_batch, self.spot_feature, M_block)
                 # end_time1 = time.time()
                 # print('time of loss:', end_time1 - start_time)
                 # print(loss.shape)
+                loss_plot.append(loss.detach().numpy())
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
                 epoch_loss += loss.item()
+
                 # end_time2 = time.time()
                 # print('time of backward:', end_time2 - end_time1)
 
             if epoch % print_each == 0:
                 print(f"Epoch {epoch}: Loss {epoch_loss / num_batches}")
 
+        # 画出loss_plot的折线图
+        plt.plot(loss_plot)
+        plt.xlabel('Iteration')
+        plt.ylabel('Loss')
+        plt.title('Training Loss Over Time')
+        plt.savefig('loss_plot.png')
+        
         with torch.no_grad():
+            self.M = sign_a * torch.abs(self.M)
             output = softmax(self.M, dim=1)
             return output.cpu().detach().numpy()
+        
+            

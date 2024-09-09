@@ -39,7 +39,8 @@ source("/root/beifen/plot_code/calculate_spot_radius.R")
 source("/root/beifen/plot_code/get_my_colors.R")
 
 # dataset <- "Mouse_brain_hippocampus_STexpr_cellSegmentation"
-dataset <- "test_1000"
+# dataset <- "test_1000"
+dataset <- "section2"
 data_dir <- "/root/beifen/plot_csv/"
 
 plot_sub_image <- function(im = NULL, im_path = NULL, image_transparency = 0, w = NULL, h = NULL, xoff = 0, yoff = 0, x_scale = 1,
@@ -72,11 +73,20 @@ plot_sub_image <- function(im = NULL, im_path = NULL, image_transparency = 0, w 
     }
     im <- im %>%
         as_EBImage()
+    # print(cell_types)
+
 
     uni_celltypes <- sort(unique(as.character(cell_types)))
+    # print(uni_celltypes)
+
     cellids <- names(cell_types)
-    num_celltypes <- table(cell_types[match(unique(cellids), cellids)])
+
+    # print(cellids)
+
+    num_celltypes <- table(cell_types)
+    # print(num_celltypes)
     num_celltypes <- num_celltypes[match(uni_celltypes, names(num_celltypes))]
+    # print(num_celltypes)
     n <- length(uni_celltypes)
 
     if (is.null(color_use)) {
@@ -97,7 +107,6 @@ plot_sub_image <- function(im = NULL, im_path = NULL, image_transparency = 0, w 
         display(im, method = "raster")
     }
 
-    # print(paste0("plot_spot:", plot_spot))
     if (plot_spot) {
         plot_spot_info(spot_coordinates, w, h, xoff, yoff, x_scale,
             spot_cols = spot_cols, barcode = F,
@@ -119,15 +128,6 @@ plot_sub_image <- function(im = NULL, im_path = NULL, image_transparency = 0, w 
         tmp <- sapply(y_at * x_scale, function(x) abline(v = x, lty = 2, col = axis_col))
     }
 
-    # print(cell_coordinates)
-    # print(contour)
-    print(paste0("plot_cell:", plot_cell))
-    print(paste0("cell_coordinates_size:", cell_coordinates_size))
-    print(paste0("xoff:", xoff))
-    print(paste0("yoff:", yoff))
-    print(paste0("x_scale:", x_scale))
-    print(paste0("w:", w))
-    print(paste0("h:", h))
     if (plot_cell) {
         plot_cell_contour(contour, cell_coordinates, w, h, xoff, yoff, x_scale, cell_cols, cell_coordinates_size = cell_coordinates_size)
         par(mar = c(0, 0, 0, 0))
@@ -231,7 +231,7 @@ if (sys.nframe() == 0) {
     cell_data <- cell_data$type
 
 
-    # 读取细胞坐标数据
+    # <U+8BFB><U+53D6><U+7EC6><U+80DE><U+5750><U+6807><U+6570><U+636E>
     # cell_coordinates <- read.csv("/home/yanghl/zhushijia/model_new_zhu/model_tangram_test/plot_csv/section2/sum_cell_coordinates.csv")
     # cell_coordinates <- read.csv("E:/Omics/beifen/plot_csv/Mouse_brain_hippocampus_STexpr_cellSegmentation/sum_cell_coordinates.csv")
     cell_coordinates <- read.csv(paste0(data_dir, dataset, "/sum_cell_coordinates.csv"))

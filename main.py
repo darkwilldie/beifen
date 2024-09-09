@@ -1,9 +1,12 @@
+import time
+from sklearn.cross_decomposition import CCA
 import torch
 import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 import argparse
 from sklearn.cluster import KMeans
+from tqdm import tqdm
 import model as scsm
 from sklearn.preprocessing import StandardScaler
 import phenograph
@@ -12,7 +15,42 @@ from sklearn.decomposition import PCA
 import os
 from sim_tangram.train_tangram import read_csv_and_run_tangram
 from sim_tangram.mapping_optimizer_CCA import cos_sim
+import torch.linalg as LA
 from os.path import join, exists
+
+def torch_cca(X, Y, n_components=1, reg_param=1e-5):
+    device = X.device  # 确保计算在同一设备上（GPU或CPU）
+
+    X = X.float()
+    Y = Y.float()
+
+    # 标准化和中心化
+    X = X - X.mean(dim=0)
+    Y = Y - Y.mean(dim=0)
+
+    n = X.size(1) - 1
+
+    # 计算协方差矩阵
+    cov_xx = torch.matmul(X.transpose(0, 1), X) / n + reg_param * torch.eye(X.size(-1), device=device)
+    cov_yy = torch.matmul(Y.transpose(0, 1), Y) / n + reg_param * torch.eye(Y.size(-1), device=device)
+    cov_xy = torch.matmul(X.transpose(0, 1), Y) / n
+
+    # Cholesky分解
+    chol_xx = LA.cholesky(cov_xx)
+    chol_yy = LA.cholesky(cov_yy)
+
+    # 白化
+    whitened_x = LA.solve_triangular(chol_xx, X.transpose(0, 1), upper=False).transpose(0, 1)
+    whitened_y = LA.solve_triangular(chol_yy, Y.transpose(0, 1), upper=False).transpose(0, 1)
+
+    # 奇异值分解
+    u, _, v = torch.svd(torch.matmul(whitened_x.transpose(0, 1), whitened_y))
+
+    # 计算典型变量
+    X_c = torch.matmul(whitened_x, u[:, :n_components])
+    Y_c = torch.matmul(whitened_y, v[:, :n_components])
+
+    return X_c, Y_c
 
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
@@ -413,19 +451,58 @@ def main(params):
     print("latent_image.shape:", latent_image.shape)
 
     # 余弦相似度
+    time1 = time.time()
     sum_cos_sim2 = cos_sim(latent_sc, latent_st)
+    time2 = time.time()
     print("^" * 50)
+    print("time2-time1:", time2 - time1)
     print("sum_cos_sim2.shape:", sum_cos_sim2.shape)
 
+    # CCA
+    # X_c, Y_c, cor_cca = torch_cca(latent_sc.unsqueeze(0).transpose(1, 2), latent_st.unsqueeze(0).transpose(1, 2))
+    
+    # CCA
+    # 将数据移动到GPU
+    # 以下代码不计算梯度
+    # with torch.no_grad():
+    #     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    #     sc = latent_sc.to(device)
+    #     st = latent_st.to(device)
+    #     img = latent_image.to(device)
+
+    #     n_features_sc = sc.shape[0]
+    #     n_features_st = st.shape[0]
+    #     cor_cca = torch.zeros((n_features_sc, n_features_st), device=device)
+
+    #     for j in tqdm(range(n_features_st)):
+    #         print(j)
+
+    #         Y = torch.vstack((st[j, :], img[j, :])).T
+    #         print('Y shape:', Y.shape)
+    #         # Y = st[j, :].T
+
+    #         for i in range(n_features_sc):
+    #             X = sc[i, :].reshape(-1, 1)  # 将sc的列转换为列矩阵
+
+    #             # 使用PyTorch实现的CCA模型
+    #             X_c, Y_c = torch_cca(X, Y)
+
+    #             # 计算典型相关系数
+    #             correlation_matrix = torch.corrcoef(torch.cat((X_c, Y_c), dim=1).T)
+    #             cor_cca[i, j] = correlation_matrix[0, 1]  # 取典型相关系数
+    # print("cor_cca.shape:", cor_cca.shape)
+
     # tangram
-    sum_cos_sim = read_csv_and_run_tangram(
-        latent_sc, latent_st, latent_image
+    tangram_sim = read_csv_and_run_tangram(
+        latent_sc, latent_st, latent_image, num_epochs=params.tangram_epochs
     )
 
     # print("reconstructed_data.shape:", reconstructed_data.shape)
     # print("sum_cos_sim.shape:", sum_cos_sim.shape)
 
-    torch.save(sum_cos_sim, params.weight_name + "_tangram_cca.pt")
+    torch.save(tangram_sim, params.weight_name + "_tangram_cca.pt")
+    # torch.save(cor_cca, params.weight_name + "_cca.pt")
     torch.save(sum_cos_sim2, params.weight_name + "_cos.pt")
 
 
@@ -471,6 +548,7 @@ if __name__ == "__main__":
         type=str,
     )
     parser.add_argument("--data_dir", default="/root/beifen/data", type=str)
+    parser.add_argument("--tangram_epochs", default=200, type=int)
     params = parser.parse_args()
 
 if __name__ == "__main__":

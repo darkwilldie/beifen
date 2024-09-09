@@ -18,13 +18,14 @@ except AttributeError:
     sum_tensor = tensor_tuple
 
 # 赋余弦相似度的符号给tangram的张量
-# torch_path1 = f"test_1000_cos.pt"
-# # torch_path1 = f"E:/Omics/beifen/test_cossim/original_sc_st_Mouse_brain.pt"
-# tensor_tuple1 = torch.load(torch_path1, map_location="cpu")
-# signs_a = torch.sign(tensor_tuple1).detach().cpu().numpy()
-# sum_tensor = signs_a * np.abs(sum_tensor)
-# print(sum_tensor)
-# quit()
+torch_path1 = f"test_1000_cos.pt"
+# torch_path1 = f"E:/Omics/beifen/test_cossim/original_sc_st_Mouse_brain.pt"
+tensor_tuple1 = torch.load(torch_path1, map_location="cpu")
+print('tangram shape',sum_tensor.shape)
+print('cos sim shape',tensor_tuple1.shape)
+# assert False
+signs_a = torch.sign(tensor_tuple1).detach().cpu().numpy()
+sum_tensor = signs_a * np.abs(sum_tensor)
 # print(sum_tensor)
 # print(sum_tensor.shape)
 # print(cos_sim_sc_image,cos_sim_sc_st,sum_tensor)
@@ -72,7 +73,7 @@ cluster_type_to_cell_csv = cluster_type_to_cell_csv.rename(
 print(cluster_type_to_cell_csv)
 
 merged_df = pd.merge(
-    sum_tensor, cluster_type_to_cell_csv, on="sc_name", how="left"
+    sum_tensor, cluster_type_to_cell_csv, on="sc_name", how="right"
 ).dropna()
 print(merged_df)
 

@@ -27,7 +27,7 @@ cell_coordinates_csv["pixel_y"] *= image_resize
 cell_coordinates_csv.rename(columns={"pixel_x": "X", "pixel_y": "Y"}, inplace=True)
 # cell_coordinates_csv = cell_coordinates_csv.sort_values(by='cell_id')
 
-print(cell_coordinates_csv)
+# print(cell_coordinates_csv)
 
 cell_type_csv = pd.read_csv(
     # f"E:/Omics/beifen/plot_csv/{dataset}/{type}_spot_cell_type.csv",
@@ -38,7 +38,7 @@ cell_type_csv = pd.read_csv(
 merged_df = pd.merge(
     cell_type_csv, cell_coordinates_csv, on="cell_id", how="left"
 ).dropna()
-print(merged_df)
+# print(merged_df)
 merged_df.to_csv(
     f"plot_csv/{dataset}/{type}_cell_coordinates.csv", index=False
 )
