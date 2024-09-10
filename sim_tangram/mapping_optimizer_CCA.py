@@ -29,7 +29,7 @@ def cos_sim(sc_feature, other_feature):
     # print(softmax_output)
     return cos_sim_matrix
     
-def torch_corrcoef(X, Y, batch_size=3000):
+def torch_corrcoef(X, Y, batch_size=4000):
     X_demean = X - torch.mean(X, dim=1, keepdim=True)
     Y_demean = Y - torch.mean(Y, dim=1, keepdim=True)
     cov_matrix = torch.matmul(X_demean.transpose(1, 2), Y_demean) / (X.shape[1] - 1)
@@ -44,21 +44,25 @@ def torch_corrcoef(X, Y, batch_size=3000):
     
     num_batches = (X_std.shape[0] + batch_size - 1) // batch_size
     
-    for i in tqdm(range(num_batches)):
+    for i in (range(num_batches)):
         start_idx = i * batch_size
         end_idx = min((i + 1) * batch_size, X_std.shape[0])
         
         X_std_batch = X_std[start_idx:end_idx, :]
         Y_std_batch = Y_std[start_idx:end_idx, :]
+
+        # out = torch.outer(X_std_batch.squeeze(1), Y_std_batch.squeeze(1))
+        # print('out', out.shape)
         # print('X_std_batch', X_std_batch.shape)
         # print('Y_std_batch', Y_std_batch.shape)
-        
-        # out = torch.outer(X_std_batch, Y_std_batch)
+        # print('corr_matrix', corr_matrix.shape)
+        #! 代码写错了，out直接赋值导致循环完全没有意义
+        # todo: 直接用统一的out效果更好，尝试一下均值？
+        out = torch.einsum('bi,bj->bij', X_std_batch, Y_std_batch)
+        # for j in range(X_std_batch.shape[0]):
+            # out = torch.outer(X_std_batch[j, :], Y_std_batch[j, :])
         # print('out', out.shape)
-        for j in range(X_std_batch.shape[0]):
-        # out = torch.einsum('bi,bj->bij', X_std_batch, Y_std_batch)
-            out = torch.outer(X_std_batch[j, :], Y_std_batch[j, :])
-            # print('out', out.shape)
+        # assert False
 
         corr_matrix[start_idx:end_idx, :] = cov_matrix[start_idx:end_idx, :] / out
 
@@ -73,8 +77,11 @@ def torch_cca(X, Y, n_components=2, reg_param=1e-5):
     Y = Y.float()
 
     # 标准化和中心化
-    X = X - X.mean(dim=0)
-    Y = Y - Y.mean(dim=0)
+    #! 二维计算改为三维，此处的dim应从0->1
+    X = X - X.mean(dim=1).unsqueeze(1)
+    Y = Y - Y.mean(dim=1).unsqueeze(1)
+    # X = X - X.mean(dim=0)
+    # Y = Y - Y.mean(dim=0)
 
     n = X.size(1) - 1
 
@@ -97,6 +104,7 @@ def torch_cca(X, Y, n_components=2, reg_param=1e-5):
     cov_xy = torch.matmul(X.transpose(1, 2), Y) / n
 
     # Cholesky分解
+    assert torch.all(cov_xx >= 0), print(cov_xx)
     chol_xx = LA.cholesky(cov_xx)
     chol_yy = LA.cholesky(cov_yy)
 
@@ -235,7 +243,8 @@ class Mapper:
         # G_pred.shape = (43757, 512)
         # G_with_image.shape = (512, 43757, 2)
         # 计算预测值和真实值之间的相关性（gv_term = (43757, 1, 1)）
-        gv_term = self.lambda_g1 * calculate_correlations(G_pred, G_with_image[:,:,:1])
+        #! 目前没有用image信息
+        gv_term = self.lambda_g1 * calculate_correlations(G_pred, G_with_image)
 
         # # 计算cos sim(shape ([9000, 43757]))
         # sum_cos_sim = cos_sim(S_batch, G_with_image[:,:,0].t())
@@ -254,16 +263,16 @@ class Mapper:
 
         loss_plot = []
 
-        torch_path1 = f"section2_every_epoch_cos.pt"
+        torch_path1 = f"section2_cos.pt"
         # torch_path1 = f"E:/Omics/beifen/test_cossim/original_sc_st_Mouse_brain.pt"
-        tensor_tuple1 = torch.load(torch_path1, map_location="cpu")
-        sign_a = torch.sign(tensor_tuple1).float().detach()
+        cos_sim = torch.load(torch_path1, map_location="cpu")
+        sign_a = torch.sign(cos_sim).float().detach()
         
         torch.manual_seed(self.random_state)
         optimizer = torch.optim.Adam([self.M], lr=learning_rate)
-        print('M.shape', self.M.shape)
-        print('S.shape', self.S.shape)
-        num_batches = self.S.shape[0] // batch_size
+        # print('M.shape', self.M.shape)
+        # print('S.shape', self.S.shape)
+        num_batches = (self.S.shape[0] + batch_size - 1) // batch_size
         # s cell 100*50  g spot 40*50
         for epoch in tqdm(range(num_epochs)):
             epoch_loss = 0
@@ -273,17 +282,17 @@ class Mapper:
                 end_idx = start_idx + batch_size
                 S_batch = self.S[start_idx:end_idx]
                 # M_block = self.M[start_idx:end_idx]
+                #? 是否应该先赋符号，再softmax？
                 M_block = softmax(self.M[start_idx:end_idx], dim=1)
 
                 #! 计算cos sim(shape ([9000, 43757]))
                 # sum_cos_sim = cos_sim(S_batch, self.spot_feature[:,:,0].t())
-                # # print('sum_cos_sim', sum_cos_sim.shape)
-                # # print('M_block', M_block.shape)
+                # # # print('sum_cos_sim', sum_cos_sim.shape)
+                # # # print('M_block', M_block.shape)
                 # assert M_block.shape == sum_cos_sim.shape
                 # #? 赋符号（是给M_block赋符号，而非预测值和真实值之间的相关性），这一步是否合理？
                 # sign_a = torch.sign(sum_cos_sim)
-                # sign_a = torch.sign(tensor_tuple1)
-                # M_block.data = torch.sign(sum_cos_sim) * torch.abs(M_block)
+                # # M_block.data = torch.sign(sum_cos_sim) * torch.abs(M_block)
                 # M_block = sign_a * torch.abs(M_block)
 
                 # 计算损失
@@ -292,7 +301,7 @@ class Mapper:
                 # end_time1 = time.time()
                 # print('time of loss:', end_time1 - start_time)
                 # print(loss.shape)
-                loss_plot.append(loss.detach().numpy())
+                loss_plot.append(loss.detach().cpu().numpy())
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()

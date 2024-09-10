@@ -458,6 +458,8 @@ def main(params):
     print("time2-time1:", time2 - time1)
     print("sum_cos_sim2.shape:", sum_cos_sim2.shape)
 
+    torch.save(sum_cos_sim2, params.weight_name + "_cos.pt")
+
     # CCA
     # X_c, Y_c, cor_cca = torch_cca(latent_sc.unsqueeze(0).transpose(1, 2), latent_st.unsqueeze(0).transpose(1, 2))
     
@@ -503,7 +505,6 @@ def main(params):
 
     torch.save(tangram_sim, params.weight_name + "_tangram_cca.pt")
     # torch.save(cor_cca, params.weight_name + "_cca.pt")
-    torch.save(sum_cos_sim2, params.weight_name + "_cos.pt")
 
 
 if __name__ == "__main__":
@@ -551,5 +552,4 @@ if __name__ == "__main__":
     parser.add_argument("--tangram_epochs", default=200, type=int)
     params = parser.parse_args()
 
-if __name__ == "__main__":
     main(params)

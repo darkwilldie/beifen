@@ -38,3 +38,35 @@ self.spot_feature = torch.cat(
 ).permute(2, 1, 0)
 
 ```
+```python
+X_std_batch torch.Size([3366, 1])
+Y_std_batch torch.Size([3366, 1])
+corr_matrix torch.Size([3366, 1, 1])
+out torch.Size([3366, 1, 1])
+```
+
+TODO
+- [] 找出每个epoch进行赋值，最后效果差的原因
+- [] 验证cos sim和cca等价
+- [] 整合代码，纵向变成横向
+- [] 检验计算cca时用不用image信息的影响
+
+DONE
+- [x] 用tangram每个epoch的损失画折线图
+- [x] 整合了后处理代码，现在可以用命令行参数统一指定。
+- [x] 检查出了两处代码错误，现在的loss曲线平滑
+
+发现代码的一个重大错误
+```python
+    X = X - X.mean(dim=0)
+    Y = Y - Y.mean(dim=0)
+```
+在升维的时候应该变为
+```python
+    X = X - X.mean(dim=1).unsqueeze(1)
+    Y = Y - Y.mean(dim=1).unsqueeze(1)
+```
+改过来之后的变化有：
+1. 效果变好
+2. 损失曲线变平滑，在70 epoch之后损失下降速度指数级变快，迅速从1000级别变成120epoch的e+11级别。
+3. 推测由于1.，在150个epoch前，在cca内部炸成nan
