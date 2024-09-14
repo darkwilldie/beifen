@@ -28,6 +28,13 @@ def cos_sim(sc_feature, other_feature):
     # softmax_output = F.softmax(cos_sim_matrix, dim=1)
     # print(softmax_output)
     return cos_sim_matrix
+
+def cos_sim_dig(sc_feature, other_feature):
+    sc_feature = F.normalize(sc_feature, dim=1)
+    other_feature = F.normalize(other_feature, dim=1)
+    cos_sim_matrix = torch.sum(sc_feature * other_feature, dim=1, keepdim=True)
+    assert cos_sim_matrix.shape == (sc_feature.shape[0], 1)
+    return cos_sim_matrix
     
 def torch_corrcoef(X, Y, batch_size=4000):
     X_demean = X - torch.mean(X, dim=1, keepdim=True)
@@ -57,7 +64,6 @@ def torch_corrcoef(X, Y, batch_size=4000):
         # print('Y_std_batch', Y_std_batch.shape)
         # print('corr_matrix', corr_matrix.shape)
         #! 代码写错了，out直接赋值导致循环完全没有意义
-        # todo: 直接用统一的out效果更好，尝试一下均值？
         out = torch.einsum('bi,bj->bij', X_std_batch, Y_std_batch)
         # for j in range(X_std_batch.shape[0]):
             # out = torch.outer(X_std_batch[j, :], Y_std_batch[j, :])
@@ -80,8 +86,6 @@ def torch_cca(X, Y, n_components=2, reg_param=1e-5):
     #! 二维计算改为三维，此处的dim应从0->1
     X = X - X.mean(dim=1).unsqueeze(1)
     Y = Y - Y.mean(dim=1).unsqueeze(1)
-    # X = X - X.mean(dim=0)
-    # Y = Y - Y.mean(dim=0)
 
     n = X.size(1) - 1
 
@@ -146,6 +150,8 @@ def calculate_correlations(sc_torch, st_torch):
     # print('&&st_torch', st_torch.shape)
     # time1 = time.time()
     # # 余弦相似度
+    cos_sim1 = cos_sim_dig(sc_torch, st_torch[:,:,0].t()).unsqueeze(-1)
+    # print('cos_sim1', cos_sim1.shape)
     # sum_cos_sim = cos_sim(sc_torch, st_torch.permute(1, 0, 2)[:,:,0])
     # time2 = time.time()
     # print('time of cos_sim:', time2 - time1)
@@ -158,19 +164,10 @@ def calculate_correlations(sc_torch, st_torch):
     X_c_torch, Y_c_torch, torch_correlations = torch_cca(
         sc_torch, st_torch, n_components=1
     )
-    # # 获取 sum_tensor 对角线上的元素
-    # diagonal_elements = torch.diag(sum_cos_sim)
-    # # 获取对角线元素的符号
-    # diagonal_signs = torch.sign(diagonal_elements).detach().cpu().reshape(-1, 1, 1)
-    
-    # print('shape of diagonal_signs:', diagonal_signs.shape)
-    # # print("对角线元素的符号:", diagonal_signs)
-    # # signs_a = torch.sign(sum_cos_sim).detach().cpu().numpy()
-    # # print('signs_a', signs_a.shape)
     # print('torch_correlations', torch_correlations.shape)
-    # assert torch_correlations.shape == diagonal_signs.shape
-    # # torch_correlations = signs_a * np.abs(torch_correlations)
-    # torch_correlations.data = diagonal_signs * torch.abs(torch_correlations)
+    assert torch_correlations.shape == cos_sim1.shape
+
+    torch_correlations = torch.sign(cos_sim1) * torch.abs(torch_correlations)
 
     # end_time = time.time()
     # print('time of torch_cca:', end_time - start_time)
@@ -242,10 +239,9 @@ class Mapper:
         # S.shape = (9000, 512)
         # G_pred.shape = (43757, 512)
         # G_with_image.shape = (512, 43757, 2)
-        # 计算预测值和真实值之间的相关性（gv_term = (43757, 1, 1)）
-        #! 目前没有用image信息
+        # 计算预测值和真实值之间的相关性（gv_term = (43757, 1, 1)
+        # ! 目前没有用image信息
         gv_term = self.lambda_g1 * calculate_correlations(G_pred, G_with_image)
-
         # # 计算cos sim(shape ([9000, 43757]))
         # sum_cos_sim = cos_sim(S_batch, G_with_image[:,:,0].t())
         # print('sum_cos_sim', sum_cos_sim.shape)
@@ -263,10 +259,10 @@ class Mapper:
 
         loss_plot = []
 
-        torch_path1 = f"section2_cos.pt"
-        # torch_path1 = f"E:/Omics/beifen/test_cossim/original_sc_st_Mouse_brain.pt"
-        cos_sim = torch.load(torch_path1, map_location="cpu")
-        sign_a = torch.sign(cos_sim).float().detach()
+        # torch_path1 = f"section2_cos.pt"
+        # # torch_path1 = f"E:/Omics/beifen/test_cossim/original_sc_st_Mouse_brain.pt"
+        # cos_sim = torch.load(torch_path1, map_location="cpu")
+        # sign_a = torch.sign(cos_sim).float().detach()
         
         torch.manual_seed(self.random_state)
         optimizer = torch.optim.Adam([self.M], lr=learning_rate)
@@ -281,23 +277,26 @@ class Mapper:
                 start_idx = i * batch_size
                 end_idx = start_idx + batch_size
                 S_batch = self.S[start_idx:end_idx]
-                # M_block = self.M[start_idx:end_idx]
-                #? 是否应该先赋符号，再softmax？
-                M_block = softmax(self.M[start_idx:end_idx], dim=1)
+                M_block = self.M[start_idx:end_idx]
 
-                #! 计算cos sim(shape ([9000, 43757]))
+                #? 是否应该先赋符号，再softmax？
+                M_block = softmax(M_block, dim=1)
+                # 计算cos sim(shape ([9000, 43757]))
+                #! 这里的S和spot_feature每个epoch都不变
                 # sum_cos_sim = cos_sim(S_batch, self.spot_feature[:,:,0].t())
-                # # # print('sum_cos_sim', sum_cos_sim.shape)
-                # # # print('M_block', M_block.shape)
+                # print('sum_cos_sim', sum_cos_sim.shape)
+                # print('M_block', M_block.shape)
                 # assert M_block.shape == sum_cos_sim.shape
-                # #? 赋符号（是给M_block赋符号，而非预测值和真实值之间的相关性），这一步是否合理？
+                #? 赋符号（是给M_block赋符号，而非预测值和真实值之间的相关性），这一步是否合理？
                 # sign_a = torch.sign(sum_cos_sim)
-                # # M_block.data = torch.sign(sum_cos_sim) * torch.abs(M_block)
+                # M_block.data = torch.sign(sum_cos_sim) * torch.abs(M_block)
                 # M_block = sign_a * torch.abs(M_block)
+
 
                 # 计算损失
                 # start_time = time.time()
                 loss = self._loss_fn(S_batch, self.spot_feature, M_block)
+
                 # end_time1 = time.time()
                 # print('time of loss:', end_time1 - start_time)
                 # print(loss.shape)
@@ -321,7 +320,7 @@ class Mapper:
         plt.savefig('loss_plot.png')
         
         with torch.no_grad():
-            self.M = sign_a * torch.abs(self.M)
+            # self.M = sign_a * torch.abs(self.M)
             output = softmax(self.M, dim=1)
             return output.cpu().detach().numpy()
         

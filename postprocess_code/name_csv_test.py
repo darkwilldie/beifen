@@ -107,6 +107,7 @@ def main(params):
         print("文件夹已存在")
 
     # max_index_df.to_csv(f"{result_path}/{dataset}/{type}_spot_cell_type.csv", index=False)
+    print("saved", join(result_path, dataset, f"{type}_spot_cell_type.csv"))
     max_index_df.to_csv(join(result_path, dataset, f"{type}_spot_cell_type.csv"), index=False)
 
 

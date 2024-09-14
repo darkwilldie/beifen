@@ -43,6 +43,7 @@ def main(params):
         cell_type_csv, cell_coordinates_csv, on="cell_id", how="left"
     ).dropna()
     # print(merged_df)
+    print("saved", join(result_path, dataset, f"{type}_cell_coordinates.csv"))
     merged_df.to_csv(
         # f"{result_path}/{dataset}/{type}_cell_coordinates.csv",
         join(result_path, dataset, f"{type}_cell_coordinates.csv"),
