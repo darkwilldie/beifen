@@ -35,13 +35,19 @@
 library(magick)
 library(EBImage)
 
-source("/root/beifen/plot_code/calculate_spot_radius.R")
-source("/root/beifen/plot_code/get_my_colors.R")
+source("./R_plot/calculate_spot_radius.R")
+source("./R_plot/get_my_colors.R")
 
+args <- commandArgs(T)
+if (args[1] == "mouse") {
+    args[1] <- "Mouse_brain_hippocampus_STexpr_cellSegmentation"
+}
+print(args[1])
+dataset <- args[1]
 # dataset <- "Mouse_brain_hippocampus_STexpr_cellSegmentation"
 # dataset <- "test_1000"
-dataset <- "section2"
-data_dir <- "/root/beifen/final_res/"
+# dataset <- "section2"
+data_dir <- "./plot_csv/"
 
 plot_sub_image <- function(im = NULL, im_path = NULL, image_transparency = 0, w = NULL, h = NULL, xoff = 0, yoff = 0, x_scale = 1,
                            cell_coordinates = NULL,
@@ -220,20 +226,20 @@ plot_spot_info <- function(spot_coordinates, w = NULL, h = NULL, xoff = 0, yoff 
 }
 
 if (sys.nframe() == 0) {
-    # im_path <- "/home/yanghl/zhushijia/model_new_zhu/model_tangram_test/final_res/section2/sum_CytAssist_FFPE_Mouse_Brain_Rep1_tissue_image.jpg"
-    # im_path <- "E:/Omics/beifen/final_res/Mouse_brain_hippocampus_STexpr_cellSegmentation/sum_CytAssist_FFPE_Mouse_Brain_Rep1_tissue_image.jpg"
+    # im_path <- "/home/yanghl/zhushijia/model_new_zhu/model_tangram_test/plot_csv/section2/sum_CytAssist_FFPE_Mouse_Brain_Rep1_tissue_image.jpg"
+    # im_path <- "E:/Omics/beifen/plot_csv/Mouse_brain_hippocampus_STexpr_cellSegmentation/sum_CytAssist_FFPE_Mouse_Brain_Rep1_tissue_image.jpg"
     im_path <- paste0(data_dir, dataset, "/sum_CytAssist_FFPE_Mouse_Brain_Rep1_tissue_image.jpg")
-    # model_test1  /home/yanghl/zhushijia/model_new_zhu/test_my_/final_res/section1/sum_cell_coordinates.csv   general_model   model_tangram_test
-    # cell_data <- read.csv("/home/yanghl/zhushijia/model_new_zhu/model_tangram_test/final_res/section2/sum_spot_cell_type.csv")
-    # cell_data <- read.csv("E:/Omics/beifen/final_res/Mouse_brain_hippocampus_STexpr_cellSegmentation/sum_spot_cell_type.csv")
+    # model_test1  /home/yanghl/zhushijia/model_new_zhu/test_my_/plot_csv/section1/sum_cell_coordinates.csv   general_model   model_tangram_test
+    # cell_data <- read.csv("/home/yanghl/zhushijia/model_new_zhu/model_tangram_test/plot_csv/section2/sum_spot_cell_type.csv")
+    # cell_data <- read.csv("E:/Omics/beifen/plot_csv/Mouse_brain_hippocampus_STexpr_cellSegmentation/sum_spot_cell_type.csv")
     cell_data <- read.csv(paste0(data_dir, dataset, "/sum_spot_cell_type.csv"))
     cell_data$type <- factor(cell_data$type, levels = unique(cell_data$type))
     cell_data <- cell_data$type
 
 
     # <U+8BFB><U+53D6><U+7EC6><U+80DE><U+5750><U+6807><U+6570><U+636E>
-    # cell_coordinates <- read.csv("/home/yanghl/zhushijia/model_new_zhu/model_tangram_test/final_res/section2/sum_cell_coordinates.csv")
-    # cell_coordinates <- read.csv("E:/Omics/beifen/final_res/Mouse_brain_hippocampus_STexpr_cellSegmentation/sum_cell_coordinates.csv")
+    # cell_coordinates <- read.csv("/home/yanghl/zhushijia/model_new_zhu/model_tangram_test/plot_csv/section2/sum_cell_coordinates.csv")
+    # cell_coordinates <- read.csv("E:/Omics/beifen/plot_csv/Mouse_brain_hippocampus_STexpr_cellSegmentation/sum_cell_coordinates.csv")
     cell_coordinates <- read.csv(paste0(data_dir, dataset, "/sum_cell_coordinates.csv"))
 
     # colors <- c("magenta", "blue", "green", "black", "orange")
